@@ -1,0 +1,14 @@
+# My own ignores
+out
+cfg
+models
+data
+
+# for mac
+.DS_Store
+# Jupyter Notebook
+*.ipynb
+.ipynb_checkpoints
+# Byte-compiled / optimized / DLL files
+__pycache__/
+
