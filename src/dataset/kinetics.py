@@ -35,6 +35,9 @@ class Kinetics700(Dataset):
         root_path,
         hdf_path,
         ann_path,
+        clip_len=8,
+        n_clip=5,
+        downsample=1,
         spatial_transforms=None,
         temporal_transforms=None,
         mode="train",
@@ -42,6 +45,10 @@ class Kinetics700(Dataset):
         self.loader = VideoLoaderHDF5()
         self.spatial_transforms = spatial_transforms
         self.temporal_transforms = temporal_transforms
+        self.clip_len = clip_len
+        self.n_clip = n_clip
+        self.downsample = downsample
+
         ft_dir = os.path.join(root_path, hdf_path)
         classes = [os.path.basename(i) for i in glob.glob(os.path.join(ft_dir, "*"))]
         ann_path = os.path.join(root_path, ann_path)
@@ -58,6 +65,7 @@ class Kinetics700(Dataset):
             for p in filepath:
                 id = os.path.basename(p)[:-5]
                 if id not in ann.keys():
+                    # print("{} not in annotation".format(id))
                     continue
                 subset = ann[id]["subset"]
                 if mode == "train" and subset != "training":
@@ -65,9 +73,12 @@ class Kinetics700(Dataset):
                 elif mode == "val" and subset != "validation":
                     continue
                 duration = ann[id]["annotations"]["segment"]
+                if duration[1] < clip_len * n_clip * downsample:
+                    # print("{} too short".format(id))
+                    continue
                 obj = {"class": classname, "path": p, "id": id, "duration": duration}
                 self.data.append(obj)
-        print("{} videos for {}".format(self.__len__(), mode))
+        print("{} videos for {}".format(len(self), mode))
 
     # return number of features
     def __len__(self):
@@ -78,9 +89,8 @@ class Kinetics700(Dataset):
         Get tensor of video.
         Returns:
             {
-                feature:    torch.Tensor(C, T, H, W)
+                clip:       torch.Tensor(n_clip, C, clip_len, H, W)
                 class:      str,
-                path:       str,
                 id:         str,
             }
         """
@@ -90,19 +100,26 @@ class Kinetics700(Dataset):
         frame_indices = range(start, end + 1)
         if self.temporal_transforms is not None:
             frame_indices = self.temporal_transforms(frame_indices)
-        ft = self.loader(path, frame_indices)
-        ft = torch.stack([self.spatial_transforms(frame) for frame in ft], 1)
-        ft = clipify(ft, 8)
-        obj["feature"] = ft
-        return obj
+        clip = self.loader(path, frame_indices)
+        if self.spatial_transforms is not None:
+            self.spatial_transforms.randomize_parameters()
+            clip = torch.stack([self.spatial_transforms(img) for img in clip], 1)
+        clip = clipify(clip, self.clip_len, self.n_clip)
+        return {"clip": clip}
 
 
-def clipify(tensor, clip_size):
-    C, T, H, W = tensor.size()
-    tensor = torch.split(tensor, clip_size, dim=1)
-    if any([ten.size(1) != clip_size for ten in tensor]):
-        tensor = tensor[:-1]
-    return torch.stack(tensor)
+def clipify(tensor, clip_len, n_clip):
+    """
+    Divide tensor of video frames into clips
+    Args:
+        tensor: torch.Tensor(C, n_clip*clip_len, H, W)
+        clip_len: int, number of frames for a single clip
+        n_clip: int, number of clips to form
+    Returns:
+        torch.Tensor(n_clip, C, clip_len, H, W), sampled clips
+    """
+    tensor = torch.stack(torch.split(tensor, clip_len, dim=1))
+    return tensor
 
 
 def get_stats():
@@ -111,6 +128,15 @@ def get_stats():
     mean = [110.63666788 / maximum, 103.16065604 / maximum, 96.29023126 / maximum]
     std = [38.7568578 / maximum, 37.88248729 / maximum, 40.02898126 / maximum]
     return mean, std
+
+
+def collate_fn(datalist):
+    clips = []
+    for data in datalist:
+        clip = data["clip"]
+        clips.append(clip)
+    clips = torch.stack(clips)
+    return {"clip": clips}
 
 
 if __name__ == "__main__":

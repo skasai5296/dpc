@@ -112,12 +112,17 @@ class ConvGRU(nn.Module):
 
 
 class DPC(nn.Module):
-    def __init__(self, input_size, hidden_size, kernel_size, num_layers, dropout=0.1):
+    def __init__(
+        self, input_size, hidden_size, kernel_size, num_layers, pred_step=3, dropout=0.1
+    ):
         super().__init__()
         self.cnn = ClipEncoder()
         self.rnn = ConvGRU(input_size, hidden_size, kernel_size, num_layers, dropout)
 
+    # x: (B, num_clips, C, clip_len, H, W)
+    # out : (B, N, hidden_size, H, W)
     def forward(self, x):
+        # out : (B, N, hidden_size, H', W')
         out = self.cnn(x)
         out, last = self.rnn(out)
         return out, last
