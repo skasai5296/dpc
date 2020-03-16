@@ -93,8 +93,8 @@ if __name__ == "__main__":
     print("CONFIGURATIONS:")
     pprint(CONFIG)
 
-    if CONFIG.basic.use_wandb:
-        wandb.init(config=CONFIG, project=CONFIG.project_name)
+    if CONFIG.use_wandb:
+        wandb.init(name=CONFIG.config_name, config=CONFIG, project=CONFIG.project_name)
 
     model = DPC(
         CONFIG.input_size,

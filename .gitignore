@@ -1,8 +1,7 @@
 # My own ignores
 out
 cfg
-models
-data
+wandb
 
 # for mac
 .DS_Store
