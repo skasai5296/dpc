@@ -37,4 +37,4 @@ class DPCLoss(nn.Module):
             # top1: (BNHW)
             top1 = lossmat.argmax(1)
             acc = torch.eq(top1, target).sum().item() / top1.size(0) * 100
-        return loss, {"XELoss": loss.item(), "Accuracy": acc}
+        return loss, {"XELoss": loss.item(), "Accuracy (%)": acc}

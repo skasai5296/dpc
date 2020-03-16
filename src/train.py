@@ -174,7 +174,9 @@ if __name__ == "__main__":
         train_epoch(train_dl, model, optimizer, criterion, device, CONFIG, ep)
         print(f"global time {global_timer} | start validation epoch {ep}")
         val_acc = validate(val_dl, model, criterion, device, CONFIG, ep)
-        saver.save_ckpt_if_best(model, optimizer, val_acc, delete_prev=True)
+        saver.save_ckpt_if_best(
+            model, optimizer, val_acc, delete_prev=CONFIG.only_best_checkpoint
+        )
         print(
             f"global time {global_timer} | val accuracy: {val_acc:.5f}% | end epoch {ep}"
         )
