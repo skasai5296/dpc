@@ -55,9 +55,6 @@ def validate(loader, model, criterion, device, CONFIG, epoch):
             pred, gt = model(clip)
             loss, losses = criterion(pred, gt)
 
-        if CONFIG.use_wandb:
-            wandb.log({f"val {name}": val for name, val in losses.items()})
-
         val_loss.update(losses["XELoss"])
         val_acc.update(losses["Accuracy (%)"])
         if it % 10 == 9:
@@ -69,6 +66,8 @@ def validate(loader, model, criterion, device, CONFIG, epoch):
         # validating for 100 steps is enough
         if it == 100:
             break
+    if CONFIG.use_wandb:
+        wandb.log({f"val {name}": val for name, val in losses.items()})
     return val_acc.avg
 
 

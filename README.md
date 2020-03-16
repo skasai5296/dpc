@@ -13,10 +13,12 @@ matplotlib
 pytorch>=1.1.0
 torchvision
 Pillow
-accimage (optional, for fast loading of images)
+addict
+pyyaml
+h5py (for converting .jpg files to .hdf5)
+wandb
 ffmpeg (for converting .mp4 files to .jpg)
 joblib (for parallel conversions of .mp4 files to .jpg)
-h5py (for converting .jpg files to .hdf5)
 ```
 
 
