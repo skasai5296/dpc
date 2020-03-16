@@ -10,7 +10,6 @@ import torch.nn as nn
 import torchvision
 from torch.nn.utils.rnn import (pack_padded_sequence, pad_packed_sequence,
                                 pad_sequence)
-from torch.utils.data import Dataset
 from torchvision.models.video import r3d_18
 
 
@@ -21,14 +20,11 @@ class ClipEncoder(nn.Module):
         modules = list(self.model.children())[:-2]
         self.model = nn.Sequential(*modules)
 
-    # x : (B, N, C, T, H, W)
-    # out : (B, N, 512, H', W')
+    # x : (B, C, T, H, W)
+    # out : (B, 512, H', W')
     def forward(self, x):
-        B, N, *_ = x.size()
-        x = x.reshape(B * N, *_)
         out = self.model(x)
-        BN, *out_sizes = out.size()
-        return self.model(x).reshape(B, N, *out_sizes).mean(3)
+        return out.mean(2)
 
 
 class ConvGRUCell(nn.Module):
@@ -113,16 +109,48 @@ class ConvGRU(nn.Module):
 
 class DPC(nn.Module):
     def __init__(
-        self, input_size, hidden_size, kernel_size, num_layers, pred_step=3, dropout=0.1
+        self,
+        input_size,
+        hidden_size,
+        kernel_size,
+        num_layers,
+        n_clip,
+        pred_step,
+        dropout,
     ):
         super().__init__()
+        self.n_clip = n_clip
+        self.pred_step = pred_step
         self.cnn = ClipEncoder()
         self.rnn = ConvGRU(input_size, hidden_size, kernel_size, num_layers, dropout)
+        self.network_pred = nn.Sequential(
+            nn.Conv2d(hidden_size, hidden_size, kernel_size=1, padding=0),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(hidden_size, hidden_size, kernel_size=1, padding=0),
+        )
+        self.relu = nn.ReLU(inplace=False)
 
     # x: (B, num_clips, C, clip_len, H, W)
-    # out : (B, N, hidden_size, H, W)
+    # pred, out : (B, N, hidden_size, H, W)
     def forward(self, x):
-        # out : (B, N, hidden_size, H', W')
+        B, N, *sizes = x.size()
+        x = x.view(B * N, *sizes)
+        # out : (B * N, hidden_size, H', W')
         out = self.cnn(x)
-        out, last = self.rnn(out)
-        return out, last
+        _, D, H, W = out.size()
+        # out : (B, N, hidden_size, H', W')
+        out = out.view(B, N, D, H, W)
+
+        # hidden: (B, hidden_size, H', W')
+        _, hidden = self.rnn(out[:, : self.n_clip - self.pred_step, ...])
+        hidden = hidden[:, -1, ...]
+        pred = []
+        for step in range(self.pred_step):
+            # predicted: (B, hidden_size, H', W')
+            predicted = self.network_pred(hidden)
+            pred.append(predicted)
+            _, hidden = self.rnn(self.relu(predicted).unsqueeze(1), hidden.unsqueeze(0))
+            hidden = hidden[:, -1, ...]
+        # pred: (B, pred_step, hidden_size, H', W')
+        pred = torch.stack(pred, 1)
+        return pred, out[:, self.n_clip - self.pred_step :, ...]

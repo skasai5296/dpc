@@ -10,6 +10,7 @@ from torch import nn, optim
 from torch.utils.data import DataLoader
 
 from dataset.kinetics import Kinetics700, collate_fn, get_stats
+from model.criterion import DPCLoss
 from model.model import DPC
 from util import spatial_transforms, temporal_transforms
 from util.utils import ModelSaver, Timer
@@ -21,13 +22,11 @@ def train_epoch(loader, model, optimizer, criterion, device, CONFIG, epoch):
     m = model.module if hasattr(model, "module") else model
     for it, data in enumerate(loader):
         clip = data["clip"].to(device)
-        print(clip.size())
 
         optimizer.zero_grad()
-        out, _ = model(clip)
-        print(out.size())
+        pred, gt = model(clip)
 
-        loss, losses = criterion(out)
+        loss, losses = criterion(pred, gt)
 
         if CONFIG.use_wandb:
             wandb.log(losses)
@@ -49,7 +48,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--config",
         type=str,
-        default="../cfg/debug.yml",
+        default="cfg/debug.yml",
         help="path to configuration yml file",
     )
     parser.add_argument(
@@ -62,29 +61,23 @@ if __name__ == "__main__":
     CONFIG = Dict(yaml.safe_load(open(opt.config)))
     print("CONFIGURATIONS:")
     pprint(CONFIG)
-    print("\n\n")
 
     if CONFIG.basic.use_wandb:
         wandb.init(config=CONFIG, project=CONFIG.basic.project_name)
 
-    clip_len = 5
-    n_clip = 8
-    downsample = 1
-    input_size = 512
-    hidden_size = 512
-    kernel_size = 3
-    num_layers = 1
-    resize = 112
-    batch_size = 4
-    num_workers = 4
-    outpath = "out"
-    gpu_ids = [0]
-
     model = DPC(
-        CONFIG.input_size, CONFIG.hidden_size, CONFIG.kernel_size, CONFIG.num_layers
+        CONFIG.input_size,
+        CONFIG.hidden_size,
+        CONFIG.kernel_size,
+        CONFIG.num_layers,
+        CONFIG.n_clip,
+        CONFIG.pred_step,
+        CONFIG.dropout,
     )
     saver = ModelSaver(CONFIG.outpath)
-    optimizer = optim.Adam(model.parameters())
+    optimizer = optim.Adam(
+        model.parameters(), lr=CONFIG.lr, weight_decay=CONFIG.weight_decay
+    )
     saver.load_ckpt(model, optimizer)
 
     gpu_ids = list(map(str, CONFIG.gpu_ids))
@@ -112,28 +105,31 @@ if __name__ == "__main__":
     )
     tp_t = temporal_transforms.Compose(
         [
+            temporal_transforms.TemporalSubsampling(CONFIG.downsample),
             temporal_transforms.TemporalRandomCrop(
                 size=CONFIG.clip_len * CONFIG.n_clip
             ),
-            temporal_transforms.TemporalSubsampling(CONFIG.downsample),
         ]
     )
 
-    ds = Kinetics700(
-        "/home/seito/ssd2/kinetics/",
-        "videos_700_hdf5",
-        "kinetics-700-hdf5.json",
+    train_ds = Kinetics700(
+        CONFIG.data_path,
+        CONFIG.video_path,
+        CONFIG.ann_path,
         clip_len=CONFIG.clip_len,
         n_clip=CONFIG.n_clip,
         downsample=CONFIG.downsample,
-        spatial_transforms=sp_t,
-        temporal_transforms=tp_t,
+        spatial_transform=sp_t,
+        temporal_transform=tp_t,
         mode="train",
     )
-    dl = DataLoader(
-        ds,
+    train_dl = DataLoader(
+        train_ds,
         batch_size=CONFIG.batch_size,
         shuffle=True,
         num_workers=CONFIG.num_workers,
         collate_fn=collate_fn,
     )
+    criterion = DPCLoss()
+    for ep in range(saver.epoch, CONFIG.max_epoch):
+        train_epoch(train_dl, model, optimizer, criterion, device, CONFIG, ep)

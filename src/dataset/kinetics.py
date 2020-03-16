@@ -35,16 +35,16 @@ class Kinetics700(Dataset):
         root_path,
         hdf_path,
         ann_path,
-        clip_len=8,
-        n_clip=5,
-        downsample=1,
-        spatial_transforms=None,
-        temporal_transforms=None,
+        clip_len,
+        n_clip,
+        downsample,
+        spatial_transform,
+        temporal_transform,
         mode="train",
     ):
         self.loader = VideoLoaderHDF5()
-        self.spatial_transforms = spatial_transforms
-        self.temporal_transforms = temporal_transforms
+        self.spatial_transform = spatial_transform
+        self.temporal_transform = temporal_transform
         self.clip_len = clip_len
         self.n_clip = n_clip
         self.downsample = downsample
@@ -98,12 +98,13 @@ class Kinetics700(Dataset):
         path = obj["path"]
         start, end = obj["duration"]
         frame_indices = range(start, end + 1)
-        if self.temporal_transforms is not None:
-            frame_indices = self.temporal_transforms(frame_indices)
+        if self.temporal_transform is not None:
+            frame_indices = self.temporal_transform(frame_indices)
+            assert len(frame_indices) == self.clip_len * self.n_clip
         clip = self.loader(path, frame_indices)
-        if self.spatial_transforms is not None:
-            self.spatial_transforms.randomize_parameters()
-            clip = torch.stack([self.spatial_transforms(img) for img in clip], 1)
+        if self.spatial_transform is not None:
+            self.spatial_transform.randomize_parameters()
+            clip = torch.stack([self.spatial_transform(img) for img in clip], 1)
         clip = clipify(clip, self.clip_len, self.n_clip)
         return {"clip": clip}
 
@@ -154,8 +155,8 @@ if __name__ == "__main__":
         "/home/seito/ssd2/kinetics/",
         "videos_700_hdf5",
         "kinetics-700-hdf5.json",
-        spatial_transforms=sp_t,
-        temporal_transforms=tp_t,
+        spatial_transform=sp_t,
+        temporal_transform=tp_t,
         mode="val",
     )
     for i in range(10):
