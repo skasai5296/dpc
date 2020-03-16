@@ -14,8 +14,10 @@ import torch.nn.init as init
 class ModelSaver:
     """Saves and Loads model and optimizer parameters"""
 
-    def __init__(self, savedir, init_val=0):
+    def __init__(self, savedir, init_val=-1e9):
         self.savedir = savedir
+        if not os.path.exists(savedir):
+            os.makedirs(savedir)
         self.best = init_val
         self.epoch = 1
 

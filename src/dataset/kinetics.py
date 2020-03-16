@@ -13,6 +13,8 @@ from PIL import Image
 from torch.utils.data import Dataset
 from torchvision import transforms
 
+from util import spatial_transforms, temporal_transforms
+
 
 class VideoLoaderHDF5(object):
     def __call__(self, video_path, frame_indices):
@@ -129,6 +131,41 @@ def get_stats():
     mean = [110.63666788 / maximum, 103.16065604 / maximum, 96.29023126 / maximum]
     std = [38.7568578 / maximum, 37.88248729 / maximum, 40.02898126 / maximum]
     return mean, std
+
+
+def get_transforms(mode, CONFIG):
+    assert mode in ("train", "val")
+    mean, std = get_stats()
+    if mode == "train":
+        sp_t = spatial_transforms.Compose(
+            [
+                spatial_transforms.Resize(CONFIG.resize),
+                spatial_transforms.RandomResizedCrop(
+                    size=(CONFIG.resize, CONFIG.resize)
+                ),
+                spatial_transforms.RandomHorizontalFlip(),
+                spatial_transforms.ToTensor(),
+                spatial_transforms.Normalize(mean=mean, std=std),
+            ]
+        )
+    elif mode == "val":
+        sp_t = spatial_transforms.Compose(
+            [
+                spatial_transforms.Resize(CONFIG.resize),
+                spatial_transforms.CenterCrop(size=(CONFIG.resize, CONFIG.resize)),
+                spatial_transforms.ToTensor(),
+                spatial_transforms.Normalize(mean=mean, std=std),
+            ]
+        )
+    tp_t = temporal_transforms.Compose(
+        [
+            temporal_transforms.TemporalSubsampling(CONFIG.downsample),
+            temporal_transforms.TemporalRandomCrop(
+                size=CONFIG.clip_len * CONFIG.n_clip
+            ),
+        ]
+    )
+    return sp_t, tp_t
 
 
 def collate_fn(datalist):

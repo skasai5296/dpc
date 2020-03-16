@@ -9,11 +9,11 @@ from addict import Dict
 from torch import nn, optim
 from torch.utils.data import DataLoader
 
-from dataset.kinetics import Kinetics700, collate_fn, get_stats
+from dataset.kinetics import Kinetics700, collate_fn, get_transforms
 from model.criterion import DPCLoss
 from model.model import DPC
 from util import spatial_transforms, temporal_transforms
-from util.utils import ModelSaver, Timer
+from util.utils import AverageMeter, ModelSaver, Timer
 
 
 def train_epoch(loader, model, optimizer, criterion, device, CONFIG, epoch):
@@ -25,20 +25,51 @@ def train_epoch(loader, model, optimizer, criterion, device, CONFIG, epoch):
 
         optimizer.zero_grad()
         pred, gt = model(clip)
-
         loss, losses = criterion(pred, gt)
-
-        if CONFIG.use_wandb:
-            wandb.log(losses)
-        lossstr = " | ".join([f"{name}: {val:7f}" for name, val in losses.items()])
 
         loss.backward()
         if CONFIG.grad_clip > 0:
             torch.nn.utils.clip_grad_norm_(m.parameters(), max_norm=CONFIG.grad_clip)
         optimizer.step()
 
+        if CONFIG.use_wandb:
+            wandb.log({f"train {name}": val for name, val in losses.items()})
         if it % 10 == 9:
-            print(f"train {train_timer} | iter {it+1} / {len(loader)} | {lossstr}")
+            lossstr = " | ".join([f"{name}: {val:7f}" for name, val in losses.items()])
+            print(
+                f"epoch {epoch:03d}/{CONFIG.max_epoch:03d} | train | "
+                f"{train_timer} | iter {it+1:06d}/{len(loader):06d} | {lossstr}"
+            )
+
+
+def validate(loader, model, criterion, device, CONFIG, epoch):
+    val_timer = Timer()
+    val_loss = AverageMeter("validation loss")
+    val_acc = AverageMeter("validation accuracy")
+    model.eval()
+    m = model.module if hasattr(model, "module") else model
+    for it, data in enumerate(loader):
+        clip = data["clip"].to(device)
+
+        with torch.no_grad():
+            pred, gt = model(clip)
+            loss, losses = criterion(pred, gt)
+
+        if CONFIG.use_wandb:
+            wandb.log({f"val {name}": val for name, val in losses.items()})
+
+        val_loss.update(losses["XELoss"])
+        val_acc.update(losses["Accuracy (%)"])
+        if it % 10 == 9:
+            lossstr = " | ".join([f"{name}: {val:7f}" for name, val in losses.items()])
+            print(
+                f"epoch {epoch:03d}/{CONFIG.max_epoch:03d} | valid | "
+                f"{val_timer} | iter {it+1:06d}/{len(loader):06d} | {lossstr}"
+            )
+        # validating for 100 steps is enough
+        if it == 100:
+            break
+    return val_acc.avg
 
 
 if __name__ == "__main__":
@@ -63,7 +94,7 @@ if __name__ == "__main__":
     pprint(CONFIG)
 
     if CONFIG.basic.use_wandb:
-        wandb.init(config=CONFIG, project=CONFIG.basic.project_name)
+        wandb.init(config=CONFIG, project=CONFIG.project_name)
 
     model = DPC(
         CONFIG.input_size,
@@ -74,11 +105,12 @@ if __name__ == "__main__":
         CONFIG.pred_step,
         CONFIG.dropout,
     )
-    saver = ModelSaver(CONFIG.outpath)
+    saver = ModelSaver(os.path.join(CONFIG.outpath, CONFIG.config_name))
     optimizer = optim.Adam(
         model.parameters(), lr=CONFIG.lr, weight_decay=CONFIG.weight_decay
     )
-    saver.load_ckpt(model, optimizer)
+    if opt.resume:
+        saver.load_ckpt(model, optimizer)
 
     gpu_ids = list(map(str, CONFIG.gpu_ids))
     os.environ["CUDA_VISIBLE_DEVICES"] = ",".join(gpu_ids)
@@ -90,28 +122,15 @@ if __name__ == "__main__":
         print("using CPU")
 
     model = model.to(device)
+    # for sending pretrained weights to GPU for optimizer
+    for state in optimizer.state.values():
+        for k, v in state.items():
+            if isinstance(v, torch.Tensor):
+                state[k] = v.to(device)
     if torch.cuda.device_count() > 1:
         model = nn.DataParallel(model)
 
-    mean, std = get_stats()
-    sp_t = spatial_transforms.Compose(
-        [
-            spatial_transforms.Resize(CONFIG.resize),
-            spatial_transforms.RandomResizedCrop(size=(CONFIG.resize, CONFIG.resize)),
-            spatial_transforms.RandomHorizontalFlip(),
-            spatial_transforms.ToTensor(),
-            spatial_transforms.Normalize(mean=mean, std=std),
-        ]
-    )
-    tp_t = temporal_transforms.Compose(
-        [
-            temporal_transforms.TemporalSubsampling(CONFIG.downsample),
-            temporal_transforms.TemporalRandomCrop(
-                size=CONFIG.clip_len * CONFIG.n_clip
-            ),
-        ]
-    )
-
+    sp_t, tp_t = get_transforms("train", CONFIG)
     train_ds = Kinetics700(
         CONFIG.data_path,
         CONFIG.video_path,
@@ -123,6 +142,18 @@ if __name__ == "__main__":
         temporal_transform=tp_t,
         mode="train",
     )
+    sp_t, tp_t = get_transforms("val", CONFIG)
+    val_ds = Kinetics700(
+        CONFIG.data_path,
+        CONFIG.video_path,
+        CONFIG.ann_path,
+        clip_len=CONFIG.clip_len,
+        n_clip=CONFIG.n_clip,
+        downsample=CONFIG.downsample,
+        spatial_transform=sp_t,
+        temporal_transform=tp_t,
+        mode="val",
+    )
     train_dl = DataLoader(
         train_ds,
         batch_size=CONFIG.batch_size,
@@ -130,6 +161,20 @@ if __name__ == "__main__":
         num_workers=CONFIG.num_workers,
         collate_fn=collate_fn,
     )
+    val_dl = DataLoader(
+        val_ds,
+        batch_size=CONFIG.batch_size,
+        shuffle=True,
+        num_workers=CONFIG.num_workers,
+        collate_fn=collate_fn,
+    )
     criterion = DPCLoss()
     for ep in range(saver.epoch, CONFIG.max_epoch):
+        print(f"global time {global_timer} | start training epoch {ep}")
         train_epoch(train_dl, model, optimizer, criterion, device, CONFIG, ep)
+        print(f"global time {global_timer} | start validation epoch {ep}")
+        val_acc = validate(val_dl, model, criterion, device, CONFIG, ep)
+        saver.save_ckpt_if_best(model, optimizer, val_acc, delete_prev=True)
+        print(
+            f"global time {global_timer} | val accuracy: {val_acc:.5f}% | end epoch {ep}"
+        )

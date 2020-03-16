@@ -12,7 +12,7 @@ import torch.nn as nn
 class DPCLoss(nn.Module):
     def __init__(self):
         super().__init__()
-        self.loss = nn.CrossEntropyLoss()
+        self.criterion = nn.CrossEntropyLoss()
 
     def forward(self, pred, gt):
         """
@@ -31,5 +31,10 @@ class DPCLoss(nn.Module):
         lossmat = torch.matmul(pred, gt)
         # target: (BNHW)
         target = torch.arange(B * N * H * W, dtype=torch.long, device=pred.device)
-        out = self.loss(lossmat, target)
-        return out, {"XELoss": out.item()}
+        loss = self.criterion(lossmat, target)
+
+        with torch.no_grad():
+            # top1: (BNHW)
+            top1 = lossmat.argmax(1)
+            acc = torch.eq(top1, target).sum().item() / top1.size(0) * 100
+        return loss, {"XELoss": loss.item(), "Accuracy": acc}

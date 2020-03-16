@@ -26,6 +26,11 @@ class Resize(transforms.Resize):
         pass
 
 
+class CenterCrop(transforms.CenterCrop):
+    def randomize_parameters(self):
+        pass
+
+
 class RandomResizedCrop(transforms.RandomResizedCrop):
     def __init__(
         self,
