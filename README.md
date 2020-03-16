@@ -27,11 +27,15 @@ joblib (for parallel conversions of .mp4 files to .jpg)
 - run `conda env create -f environment.yml && conda activate dpc` for simple use.
 
 ## Preparation of Dataset
+- Download Kinetics 700 mp4 files
+- Prepare HDF5 files for Kinetics 700 using `src/util/convert_mp4_hdf5.py`
 
 ## Training and validation
+Run `python train.py` (by default, the system uses cfg/debug.yml as configuration for hyperparameters)
+For custom configuration, use `python train.py --config ${PATH_TO_YOUR_CUSTOM_CONFIG}`
 
 ## Evaluation
 
 ## Description
 This repository contains the implementation of dense predictive coding.
-Training and Evaluation is done on the Kinetics dataset.
+Training and Evaluation is done on the Kinetics 700 dataset.
