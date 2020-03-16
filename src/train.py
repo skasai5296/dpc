@@ -3,12 +3,12 @@ import os
 from pprint import pprint
 
 import torch
-import wandb
 import yaml
 from addict import Dict
 from torch import nn, optim
 from torch.utils.data import DataLoader
 
+import wandb
 from dataset.kinetics import Kinetics700, collate_fn, get_transforms
 from model.criterion import DPCLoss
 from model.model import DPC
