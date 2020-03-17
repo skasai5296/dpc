@@ -21,9 +21,14 @@ class ModelSaver:
         self.best = init_val
         self.epoch = 1
 
-    def load_ckpt(self, model, optimizer=None):
+    def load_ckpt(self, model, optimizer=None, start_epoch=None):
         try:
-            path = sorted(glob.glob(os.path.join(self.savedir, "*.ckpt")))[-1]
+            if start_epoch is None:
+                path = sorted(glob.glob(os.path.join(self.savedir, "*.ckpt")))[-1]
+            else:
+                path = glob.glob(
+                    os.path.join(self.savedir, f"ep{start_epoch:03d}.ckpt")
+                )
         except IndexError:
             print("no checkpoint, not loading")
             return

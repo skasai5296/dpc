@@ -2,16 +2,16 @@ import argparse
 import os
 from pprint import pprint
 
-import yaml
-
 import torch
-import wandb
+import yaml
 from addict import Dict
+from torch import nn, optim
+from torch.utils.data import DataLoader
+
+import wandb
 from dataset.kinetics import Kinetics700, collate_fn, get_transforms
 from model.criterion import DPCLoss
 from model.model import DPC
-from torch import nn, optim
-from torch.utils.data import DataLoader
 from util import spatial_transforms, temporal_transforms
 from util.utils import AverageMeter, ModelSaver, Timer
 
@@ -29,15 +29,13 @@ def train_epoch(loader, model, optimizer, criterion, device, CONFIG, epoch):
 
         loss.backward()
         if CONFIG.grad_clip > 0:
-            torch.nn.utils.clip_grad_norm_(
-                m.parameters(), max_norm=CONFIG.grad_clip)
+            torch.nn.utils.clip_grad_norm_(m.parameters(), max_norm=CONFIG.grad_clip)
         optimizer.step()
 
         if CONFIG.use_wandb:
             wandb.log({f"train {name}": val for name, val in losses.items()})
         if it % 10 == 9:
-            lossstr = " | ".join(
-                [f"{name}: {val:7f}" for name, val in losses.items()])
+            lossstr = " | ".join([f"{name}: {val:7f}" for name, val in losses.items()])
             print(
                 f"epoch {epoch:03d}/{CONFIG.max_epoch:03d} | train | "
                 f"{train_timer} | iter {it+1:06d}/{len(loader):06d} | {lossstr}"
@@ -60,8 +58,7 @@ def validate(loader, model, criterion, device, CONFIG, epoch):
         val_loss.update(losses["XELoss"])
         val_acc.update(losses["Accuracy (%)"])
         if it % 10 == 9:
-            lossstr = " | ".join(
-                [f"{name}: {val:7f}" for name, val in losses.items()])
+            lossstr = " | ".join([f"{name}: {val:7f}" for name, val in losses.items()])
             print(
                 f"epoch {epoch:03d}/{CONFIG.max_epoch:03d} | valid | "
                 f"{val_timer} | iter {it+1:06d}/{len(loader):06d} | {lossstr}"
@@ -96,8 +93,7 @@ if __name__ == "__main__":
     pprint(CONFIG)
 
     if CONFIG.use_wandb:
-        wandb.init(name=CONFIG.config_name, config=CONFIG,
-                   project=CONFIG.project_name)
+        wandb.init(name=CONFIG.config_name, config=CONFIG, project=CONFIG.project_name)
 
     model = DPC(
         CONFIG.input_size,
