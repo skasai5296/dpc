@@ -154,7 +154,7 @@ def get_transforms(mode, CONFIG):
                     size=(CONFIG.resize, CONFIG.resize), scale=(0.5, 1.0)
                 ),
                 spatial_transforms.RandomHorizontalFlip(),
-                spatial_transforms.RandomGray(p=0.5),
+                spatial_transforms.RandomGrayscale(p=0.5),
                 spatial_transforms.ColorJitter(
                     brightness=0.5, contrast=0.5, saturation=0.5, hue=0.25),
                 spatial_transforms.ToTensor(),

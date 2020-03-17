@@ -31,25 +31,16 @@ class CenterCrop(transforms.CenterCrop):
     def randomize_parameters(self):
         pass
 
+class RandomGrayscale(transforms.RandomGrayscale):
+    def randomize_parameters(self):
+        pass
 
 class ColorJitter(transforms.ColorJitter):
-    def __init__(self, brightness=0, contrast=0, saturation=0, hue=0):
-        super().__init__(brightness, contrast, saturation, hue)
-        self.randomize_parameters()
-
-    def __call__(self, img):
-        if self.randomize:
-            self.transform = self.get_params(
-                self.brightness, self.contrast, self.saturation, self.hue
-            )
-            self.randomize = False
-
-        return self.transform(img)
-
     def randomize_parameters(self):
-        self.randomize = True
+        pass
 
 
+# make consistent wrt clip
 class RandomResizedCrop(transforms.RandomResizedCrop):
     def __init__(
         self,
@@ -75,6 +66,7 @@ class RandomResizedCrop(transforms.RandomResizedCrop):
         self.randomize = True
 
 
+# make consistent wrt clip
 class RandomHorizontalFlip(transforms.RandomHorizontalFlip):
     def __init__(self, p=0.5):
         super().__init__(p)

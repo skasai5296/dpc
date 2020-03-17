@@ -10,8 +10,8 @@ Code is still in progress.
 python>=3.7
 numpy
 matplotlib
-pytorch>=1.1.0
-torchvision
+pytorch>=1.3.0
+torchvision>=0.4.0
 Pillow
 addict
 pyyaml
