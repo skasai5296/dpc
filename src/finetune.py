@@ -2,20 +2,21 @@ import argparse
 import os
 from pprint import pprint
 
-import torch
 import yaml
+
+import torch
+import wandb
 from addict import Dict
+from dataset.kinetics import Kinetics700, collate_fn, get_transforms
+from model.criterion import DPCClassification
+from model.model import DPC, ClassificationHead
 from torch import nn, optim
 from torch.utils.data import DataLoader
-
-import wandb
-from dataset.kinetics import Kinetics700, collate_fn, get_transforms
-from model.model import DPC_Finetune
 from util import spatial_transforms, temporal_transforms
 from util.utils import AverageMeter, ModelSaver, Timer
 
 
-def train_epoch(loader, model, optimizer, criterion, device, CONFIG, epoch):
+def train_epoch(loader, model, head, optimizer, criterion, device, CONFIG, epoch):
     train_timer = Timer()
     model.train()
     m = model.module if hasattr(model, "module") else model
@@ -24,25 +25,28 @@ def train_epoch(loader, model, optimizer, criterion, device, CONFIG, epoch):
         label = data["label"].to(device)
 
         optimizer.zero_grad()
-        out = model(clip)
+        out = head(m.extract_feature(clip))
         loss, losses = criterion(out, label)
 
         loss.backward()
         if CONFIG.grad_clip > 0:
-            torch.nn.utils.clip_grad_norm_(m.parameters(), max_norm=CONFIG.grad_clip)
+            torch.nn.utils.clip_grad_norm_(
+                m.parameters(), max_norm=CONFIG.grad_clip)
         optimizer.step()
 
         if CONFIG.use_wandb:
             wandb.log({f"train {name}": val for name, val in losses.items()})
         if it % 10 == 9:
-            lossstr = " | ".join([f"{name}: {val:7f}" for name, val in losses.items()])
+            lossstr = " | ".join(
+                [f"{name}: {val:7f}" for name, val in losses.items()])
             print(
                 f"epoch {epoch:03d}/{CONFIG.max_epoch:03d} | train | "
-                f"{train_timer} | iter {it+1:06d}/{len(loader):06d} | {lossstr}"
+                f"{train_timer} | iter {it+1:06d}/{len(loader):06d} | "
+                f"{lossstr}"
             )
 
 
-def validate(loader, model, criterion, device, CONFIG, epoch):
+def validate(loader, model, head, criterion, device, CONFIG, epoch):
     val_timer = Timer()
     val_loss = AverageMeter("validation loss")
     val_acc = AverageMeter("validation accuracy")
@@ -53,13 +57,14 @@ def validate(loader, model, criterion, device, CONFIG, epoch):
         label = data["label"].to(device)
 
         with torch.no_grad():
-            out = model(clip)
+            out = head(m.extract_feature(clip))
             loss, losses = criterion(out, label)
 
         val_loss.update(losses["XELoss"])
         val_acc.update(losses["Accuracy (%)"])
         if it % 10 == 9:
-            lossstr = " | ".join([f"{name}: {val:7f}" for name, val in losses.items()])
+            lossstr = " | ".join(
+                [f"{name}: {val:7f}" for name, val in losses.items()])
             print(
                 f"epoch {epoch:03d}/{CONFIG.max_epoch:03d} | valid | "
                 f"{val_timer} | iter {it+1:06d}/{len(loader):06d} | {lossstr}"
@@ -94,7 +99,8 @@ if __name__ == "__main__":
     pprint(CONFIG)
 
     if CONFIG.use_wandb:
-        wandb.init(name=CONFIG.config_name, config=CONFIG, project=CONFIG.project_name)
+        wandb.init(name=CONFIG.config_name, config=CONFIG,
+                   project=CONFIG.project_name)
 
     model = DPC(
         CONFIG.input_size,
@@ -106,11 +112,16 @@ if __name__ == "__main__":
         CONFIG.dropout,
     )
     saver = ModelSaver(os.path.join(CONFIG.outpath, CONFIG.config_name))
+    saver.load_ckpt(model, optimizer=None)
+
+    class_head = ClassificationHead(CONFIG.hidden_size, 700)
     optimizer = optim.Adam(
-        model.parameters(), lr=CONFIG.lr, weight_decay=CONFIG.weight_decay
+        class_head.parameters(), lr=CONFIG.lr, weight_decay=CONFIG.weight_decay
     )
+    saver = ModelSaver(os.path.join(
+        CONFIG.outpath, f"{CONFIG.config_name}_finetune"))
     if opt.resume:
-        saver.load_ckpt(model, optimizer)
+        saver.load_ckpt(class_head, optimizer)
 
     gpu_ids = list(map(str, CONFIG.gpu_ids))
     os.environ["CUDA_VISIBLE_DEVICES"] = ",".join(gpu_ids)
@@ -168,15 +179,18 @@ if __name__ == "__main__":
         num_workers=CONFIG.num_workers,
         collate_fn=collate_fn,
     )
-    criterion = nn.CrossEntropyLoss()
+    criterion = DPCClassification()
     for ep in range(saver.epoch, CONFIG.max_epoch):
         print(f"global time {global_timer} | start training epoch {ep}")
-        train_epoch(train_dl, model, optimizer, criterion, device, CONFIG, ep)
+        train_epoch(train_dl, model, class_head, optimizer,
+                    criterion, device, CONFIG, ep)
         print(f"global time {global_timer} | start validation epoch {ep}")
-        val_acc = validate(val_dl, model, criterion, device, CONFIG, ep)
+        val_acc = validate(val_dl, model, class_head,
+                           criterion, device, CONFIG, ep)
         saver.save_ckpt_if_best(
-            model, optimizer, val_acc, delete_prev=CONFIG.only_best_checkpoint
+            class_head, optimizer, val_acc, delete_prev=CONFIG.only_best_checkpoint
         )
         print(
-            f"global time {global_timer} | val accuracy: {val_acc:.5f}% | end epoch {ep}"
+            f"global time {global_timer} | val accuracy: {val_acc:.5f}% | "
+            f"end epoch {ep}"
         )

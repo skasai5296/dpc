@@ -5,6 +5,7 @@ import sys
 import time
 
 import numpy as np
+
 import torch
 import torch.nn as nn
 
@@ -30,11 +31,36 @@ class DPCLoss(nn.Module):
         # lossmat: (BNHW, BNHW)
         lossmat = torch.matmul(pred, gt)
         # target: (BNHW)
-        target = torch.arange(B * N * H * W, dtype=torch.long, device=pred.device)
+        target = torch.arange(
+            B * N * H * W, dtype=torch.long, device=pred.device)
         loss = self.criterion(lossmat, target)
 
         with torch.no_grad():
             # top1: (BNHW)
             top1 = lossmat.argmax(1)
             acc = torch.eq(top1, target).sum().item() / top1.size(0) * 100
+        return loss, {"XELoss": loss.item(), "Accuracy (%)": acc}
+
+
+class DPCClassification(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.criterion = nn.CrossEntropyLoss()
+
+    def forward(self, pred, gt):
+        """
+        Compute loss (dot product over feature dimension)
+        Args:
+            pred: torch.Tensor (B, num_classes)
+            gt: torch.Tensor (B), torch.long
+        Returns:
+            loss: torch.Tensor, sum of all losses
+            losses: loss dict
+        """
+        loss = self.criterion(pred, gt)
+
+        with torch.no_grad():
+            # top1: (BNHW)
+            top1 = pred.argmax(1)
+            acc = torch.eq(top1, gt).sum().item() / top1.size(0) * 100
         return loss, {"XELoss": loss.item(), "Accuracy (%)": acc}

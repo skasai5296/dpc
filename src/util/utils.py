@@ -21,7 +21,7 @@ class ModelSaver:
         self.best = init_val
         self.epoch = 1
 
-    def load_ckpt(self, model, optimizer):
+    def load_ckpt(self, model, optimizer=None):
         try:
             path = sorted(glob.glob(os.path.join(self.savedir, "*.ckpt")))[-1]
         except IndexError:
@@ -31,7 +31,8 @@ class ModelSaver:
             print(f"loading model from {path}")
             ckpt = torch.load(path, map_location="cpu")
             model.load_state_dict(ckpt["model"])
-            optimizer.load_state_dict(ckpt["optimizer"])
+            if optimizer is not None:
+                optimizer.load_state_dict(ckpt["optimizer"])
             self.best = ckpt["bestscore"]
             self.epoch = ckpt["epoch"] + 1
             print(
