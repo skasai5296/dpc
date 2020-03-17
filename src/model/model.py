@@ -154,3 +154,15 @@ class DPC(nn.Module):
         # pred: (B, pred_step, hidden_size, H', W')
         pred = torch.stack(pred, 1)
         return pred, out[:, self.n_clip - self.pred_step :, ...]
+
+    # x: (B, num_clips, C, clip_len, H, W)
+    # pred, out : (B, N, hidden_size, H, W)
+    def extract_feature(self, x):
+        B, N, *sizes = x.size()
+        x = x.view(B * N, *sizes)
+        # out : (B * N, hidden_size, H', W')
+        out = self.cnn(x)
+        _, D, H, W = out.size()
+        # out : (B, N, hidden_size, H', W')
+        out = out.view(B, N, D, H, W)
+        return out
