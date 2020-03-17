@@ -11,7 +11,7 @@ python>=3.7
 numpy
 matplotlib
 pytorch>=1.3.0
-torchvision>=0.4.0
+torchvision>=0.5.0
 Pillow
 addict
 pyyaml
