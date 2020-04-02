@@ -1,0 +1,49 @@
+wandb: Tracking run with wandb version 0.8.22
+wandb: Wandb version 0.8.31 is available!  To upgrade, please run:
+wandb:  $ pip install wandb --upgrade
+wandb: Run data is saved locally in wandb/run-20200402_095353-asb4p4p5
+wandb: Syncing run debug_finetune
+wandb: ⭐️ View project at https://app.wandb.ai/skasai5296/DPC
+wandb: 🚀 View run at https://app.wandb.ai/skasai5296/DPC/runs/asb4p4p5
+wandb: Run `wandb off` to turn off syncing.
+loading configuration from cfg/debug.yml
+CONFIGURATIONS:
+{'ann_path': 'kinetics-700-hdf5.json',
+ 'batch_size': 32,
+ 'clip_len': 5,
+ 'config_name': 'debug',
+ 'data_path': '/home/seito/ssd2/kinetics/',
+ 'downsample': 3,
+ 'dropout': 0.1,
+ 'finetune_batch_size': 16,
+ 'finetune_dropout': 0.1,
+ 'finetune_from': None,
+ 'finetune_gpu_ids': [0],
+ 'finetune_grad_clip': 0.0,
+ 'finetune_lr': 0.001,
+ 'finetune_weight_decay': 1e-05,
+ 'gpu_ids': [0, 1],
+ 'grad_clip': 0.0,
+ 'hidden_size': 512,
+ 'input_size': 512,
+ 'kernel_size': 1,
+ 'lr': 0.001,
+ 'max_epoch': 20,
+ 'n_clip': 8,
+ 'num_layers': 1,
+ 'num_workers': 4,
+ 'only_best_checkpoint': False,
+ 'outpath': 'out',
+ 'pred_step': 3,
+ 'project_name': 'DPC',
+ 'resize': 112,
+ 'use_wandb': True,
+ 'video_path': 'videos_700_hdf5',
+ 'weight_decay': 1e-05}
+
+loading model from out/debug/ep008.ckpt
+best score is set to 55.99679228126893, restarting from epoch 9
+using GPU numbers [0]
+517712 videos for train
+33253 videos for val
+global time elapsed: 17s | start training epoch 1

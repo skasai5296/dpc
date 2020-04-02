@@ -41,7 +41,7 @@ def train_epoch(loader, model, optimizer, criterion, device, CONFIG, epoch):
 
         if CONFIG.use_wandb:
             wandb.log({train_loss.name: train_loss.avg, train_acc.name: train_acc.avg})
-        if it % 10 == 9:
+        if it % 100 == 99:
             print(
                 f"epoch {epoch:03d}/{CONFIG.max_epoch:03d} | train | "
                 f"{train_timer} | iter {it+1:06d}/{len(loader):06d} | "
@@ -69,7 +69,7 @@ def validate(loader, model, criterion, device, CONFIG, epoch):
         val_loss.update(losses["XELoss"])
         val_acc.update(losses["Accuracy (%)"])
         gl_val_acc.update(losses["Accuracy (%)"])
-        if it % 10 == 9:
+        if it % 100 == 99:
             print(
                 f"epoch {epoch:03d}/{CONFIG.max_epoch:03d} | valid | "
                 f"{val_timer} | iter {it+1:06d}/{len(loader):06d} | "
