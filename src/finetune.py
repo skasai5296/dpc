@@ -10,44 +10,52 @@ from torch.utils.data import DataLoader
 
 import wandb
 from dataset.kinetics import Kinetics700, collate_fn, get_transforms
-from model.criterion import DPCClassification
-from model.model import DPC, ClassificationHead
+from model.criterion import DPCClassificationLoss
+from model.model import DPCClassification
 from util import spatial_transforms, temporal_transforms
 from util.utils import AverageMeter, ModelSaver, Timer
 
 
-def train_epoch(loader, model, head, optimizer, criterion, device, CONFIG, epoch):
+def train_epoch(loader, model, optimizer, criterion, device, CONFIG, epoch):
     train_timer = Timer()
     model.train()
     m = model.module if hasattr(model, "module") else model
+    train_loss = AverageMeter("train XEloss")
+    train_acc = AverageMeter("train Accuracy")
     for it, data in enumerate(loader):
         clip = data["clip"].to(device)
         label = data["label"].to(device)
 
         optimizer.zero_grad()
-        out = head(m.extract_feature(clip))
+        out = m(clip)
         loss, losses = criterion(out, label)
 
+        train_loss.update(losses["XELoss"])
+        train_acc.update(losses["Accuracy (%)"])
         loss.backward()
-        if CONFIG.grad_clip > 0:
-            torch.nn.utils.clip_grad_norm_(m.parameters(), max_norm=CONFIG.grad_clip)
+        if CONFIG.finetune_grad_clip > 0:
+            torch.nn.utils.clip_grad_norm_(
+                m.parameters(), max_norm=CONFIG.finetune_grad_clip
+            )
         optimizer.step()
 
         if CONFIG.use_wandb:
-            wandb.log({f"train {name}": val for name, val in losses.items()})
+            wandb.log({train_loss.name: train_loss.avg, train_acc.name: train_acc.avg})
         if it % 10 == 9:
-            lossstr = " | ".join([f"{name}: {val:7f}" for name, val in losses.items()])
             print(
                 f"epoch {epoch:03d}/{CONFIG.max_epoch:03d} | train | "
                 f"{train_timer} | iter {it+1:06d}/{len(loader):06d} | "
-                f"{lossstr}"
+                f"{train_loss} | {train_acc}"
             )
+            train_loss.reset()
+            train_acc.reset()
 
 
-def validate(loader, model, head, criterion, device, CONFIG, epoch):
+def validate(loader, model, criterion, device, CONFIG, epoch):
     val_timer = Timer()
-    val_loss = AverageMeter("validation loss")
-    val_acc = AverageMeter("validation accuracy")
+    val_loss = AverageMeter("val XEloss")
+    val_acc = AverageMeter("val Accuracy")
+    gl_val_acc = AverageMeter("epoch val Accuracy")
     model.eval()
     m = model.module if hasattr(model, "module") else model
     for it, data in enumerate(loader):
@@ -55,23 +63,26 @@ def validate(loader, model, head, criterion, device, CONFIG, epoch):
         label = data["label"].to(device)
 
         with torch.no_grad():
-            out = head(m.extract_feature(clip))
+            out = m(clip)
             loss, losses = criterion(out, label)
 
         val_loss.update(losses["XELoss"])
         val_acc.update(losses["Accuracy (%)"])
+        gl_val_acc.update(losses["Accuracy (%)"])
         if it % 10 == 9:
-            lossstr = " | ".join([f"{name}: {val:7f}" for name, val in losses.items()])
             print(
                 f"epoch {epoch:03d}/{CONFIG.max_epoch:03d} | valid | "
-                f"{val_timer} | iter {it+1:06d}/{len(loader):06d} | {lossstr}"
+                f"{val_timer} | iter {it+1:06d}/{len(loader):06d} | "
+                f"{val_loss} | {val_acc}"
             )
+            val_loss.reset()
+            val_acc.reset()
         # validating for 100 steps is enough
         if it == 100:
             break
     if CONFIG.use_wandb:
-        wandb.log({f"val {name}": val for name, val in losses.items()})
-    return val_acc.avg
+        wandb.log({val_loss.name: val_loss.avg, val_acc.name: val_acc.avg})
+    return gl_val_acc.avg
 
 
 if __name__ == "__main__":
@@ -102,36 +113,39 @@ if __name__ == "__main__":
             project=CONFIG.project_name,
         )
 
-    model = DPC(
+    model = DPCClassification(
         CONFIG.input_size,
         CONFIG.hidden_size,
         CONFIG.kernel_size,
         CONFIG.num_layers,
         CONFIG.n_clip,
         CONFIG.pred_step,
-        CONFIG.dropout,
+        CONFIG.finetune_dropout,
+        700,
     )
     saver = ModelSaver(os.path.join(CONFIG.outpath, CONFIG.config_name))
     saver.load_ckpt(model, optimizer=None, start_epoch=CONFIG.finetune_from)
 
-    class_head = ClassificationHead(CONFIG.hidden_size, 700)
     optimizer = optim.Adam(
-        class_head.parameters(), lr=CONFIG.lr, weight_decay=CONFIG.weight_decay
+        model.parameters(),
+        lr=CONFIG.finetune_lr,
+        weight_decay=CONFIG.finetune_weight_decay,
     )
     saver = ModelSaver(os.path.join(CONFIG.outpath, f"{CONFIG.config_name}_finetune"))
     if opt.resume:
-        saver.load_ckpt(class_head, optimizer)
+        saver.load_ckpt(model, optimizer)
 
-    gpu_ids = list(map(str, CONFIG.gpu_ids))
+    gpu_ids = list(map(str, CONFIG.finetune_gpu_ids))
     os.environ["CUDA_VISIBLE_DEVICES"] = ",".join(gpu_ids)
     if torch.cuda.is_available():
         device = torch.device("cuda")
-        print("using GPU numbers {}".format(CONFIG.gpu_ids))
+        print("using GPU numbers {}".format(CONFIG.finetune_gpu_ids))
     else:
         device = torch.device("cpu")
         print("using CPU")
 
     model = model.to(device)
+    criterion = DPCClassificationLoss()
     # for sending pretrained weights to GPU for optimizer
     for state in optimizer.state.values():
         for k, v in state.items():
@@ -152,7 +166,7 @@ if __name__ == "__main__":
         temporal_transform=tp_t,
         mode="train",
     )
-    sp_t, tp_t = get_transforms("val", CONFIG)
+    sp_t, tp_t = get_transforms("val", CONFIG, finetune=True)
     val_ds = Kinetics700(
         CONFIG.data_path,
         CONFIG.video_path,
@@ -166,28 +180,25 @@ if __name__ == "__main__":
     )
     train_dl = DataLoader(
         train_ds,
-        batch_size=CONFIG.batch_size,
+        batch_size=CONFIG.finetune_batch_size,
         shuffle=True,
         num_workers=CONFIG.num_workers,
         collate_fn=collate_fn,
     )
     val_dl = DataLoader(
         val_ds,
-        batch_size=CONFIG.batch_size,
+        batch_size=CONFIG.finetune_batch_size,
         shuffle=True,
         num_workers=CONFIG.num_workers,
         collate_fn=collate_fn,
     )
-    criterion = DPCClassification()
     for ep in range(saver.epoch, CONFIG.max_epoch):
         print(f"global time {global_timer} | start training epoch {ep}")
-        train_epoch(
-            train_dl, model, class_head, optimizer, criterion, device, CONFIG, ep
-        )
+        train_epoch(train_dl, model, optimizer, criterion, device, CONFIG, ep)
         print(f"global time {global_timer} | start validation epoch {ep}")
-        val_acc = validate(val_dl, model, class_head, criterion, device, CONFIG, ep)
+        val_acc = validate(val_dl, model, criterion, device, CONFIG, ep)
         saver.save_ckpt_if_best(
-            class_head, optimizer, val_acc, delete_prev=CONFIG.only_best_checkpoint
+            model, optimizer, val_acc, delete_prev=CONFIG.only_best_checkpoint
         )
         print(
             f"global time {global_timer} | val accuracy: {val_acc:.5f}% | "

@@ -1,8 +1,7 @@
 import random
 
-from PIL import Image
-
 import torchvision.transforms.functional as F
+from PIL import Image
 from torchvision import transforms
 
 
@@ -30,6 +29,27 @@ class Resize(transforms.Resize):
 class CenterCrop(transforms.CenterCrop):
     def randomize_parameters(self):
         pass
+
+
+class RandomGrayscale(transforms.RandomGrayscale):
+    def __init__(self, p=0.1):
+        self.p = p
+
+    def __call__(self, img):
+        """
+        Args:
+            img (PIL Image): Image to be converted to grayscale.
+
+        Returns:
+            PIL Image: Randomly grayscaled image.
+        """
+        num_output_channels = 1 if img.mode == "L" else 3
+        if self.random_p < self.p:
+            return F.to_grayscale(img, num_output_channels=num_output_channels)
+        return img
+
+    def randomize_parameters(self):
+        self.random_p = random.random()
 
 
 class ColorJitter(transforms.ColorJitter):

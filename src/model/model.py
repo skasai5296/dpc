@@ -5,7 +5,6 @@ import sys
 import time
 
 import numpy as np
-
 import torch
 import torch.nn as nn
 import torchvision
@@ -123,8 +122,7 @@ class DPC(nn.Module):
         self.n_clip = n_clip
         self.pred_step = pred_step
         self.cnn = ClipEncoder()
-        self.rnn = ConvGRU(input_size, hidden_size,
-                           kernel_size, num_layers, dropout)
+        self.rnn = ConvGRU(input_size, hidden_size, kernel_size, num_layers, dropout)
         self.network_pred = nn.Sequential(
             nn.Conv2d(hidden_size, hidden_size, kernel_size=1, padding=0),
             nn.ReLU(inplace=True),
@@ -151,12 +149,11 @@ class DPC(nn.Module):
             # predicted: (B, hidden_size, H', W')
             predicted = self.network_pred(hidden)
             pred.append(predicted)
-            _, hidden = self.rnn(
-                self.relu(predicted).unsqueeze(1), hidden.unsqueeze(0))
+            _, hidden = self.rnn(self.relu(predicted).unsqueeze(1), hidden.unsqueeze(0))
             hidden = hidden[:, -1, ...]
         # pred: (B, pred_step, hidden_size, H', W')
         pred = torch.stack(pred, 1)
-        return pred, out[:, self.n_clip - self.pred_step:, ...]
+        return pred, out[:, self.n_clip - self.pred_step :, ...]
 
     # x: (B, num_clips, C, clip_len, H, W)
     # hidden : (B, hidden_size, H, W)
@@ -174,14 +171,30 @@ class DPC(nn.Module):
         return hidden
 
 
-class ClassificationHead(nn.Module):
-    def __init__(self, hidden_size, num_classes):
+class DPCClassification(nn.Module):
+    def __init__(
+        self,
+        input_size,
+        hidden_size,
+        kernel_size,
+        num_layers,
+        n_clip,
+        pred_step,
+        dropout,
+        num_classes,
+    ):
         super().__init__()
-        self.num_classes = num_classes
+        self.dpc = DPC(
+            input_size, hidden_size, kernel_size, num_layers, n_clip, pred_step, dropout
+        )
         self.classification = nn.Linear(hidden_size, num_classes)
 
-    # x : (B, hidden_size, H, W)
+    # x : (B, num_clips, C, clip_len, H, W)
     # out : (B, hidden_size)
     def forward(self, x):
-        out = self.classification(x.mean(-1).mean(-1))
+        if hasattr(self.dpc, "module"):
+            out = self.dpc.module.extract_feature(x)
+        else:
+            out = self.dpc.extract_feature(x)
+        out = self.classification(out.mean(-1).mean(-1))
         return out

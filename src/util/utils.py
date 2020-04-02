@@ -35,7 +35,7 @@ class ModelSaver:
         if os.path.exists(path):
             print(f"loading model from {path}")
             ckpt = torch.load(path, map_location="cpu")
-            model.load_state_dict(ckpt["model"])
+            model.load_state_dict(ckpt["model"], strict=False)
             if optimizer is not None:
                 optimizer.load_state_dict(ckpt["optimizer"])
             self.best = ckpt["bestscore"]

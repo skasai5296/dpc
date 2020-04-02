@@ -139,7 +139,6 @@ if __name__ == "__main__":
         downsample=CONFIG.downsample,
         spatial_transform=sp_t,
         temporal_transform=tp_t,
-        mode="train",
     )
     sp_t, tp_t = get_transforms("val", CONFIG)
     val_ds = Kinetics700(
@@ -151,7 +150,6 @@ if __name__ == "__main__":
         downsample=CONFIG.downsample,
         spatial_transform=sp_t,
         temporal_transform=tp_t,
-        mode="val",
     )
     train_dl = DataLoader(
         train_ds,
