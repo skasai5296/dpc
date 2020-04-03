@@ -190,7 +190,7 @@ class DPCClassification(nn.Module):
         self.classification = nn.Linear(hidden_size, num_classes)
 
     # x : (B, num_clips, C, clip_len, H, W)
-    # out : (B, hidden_size)
+    # out : (B, num_classes)
     def forward(self, x):
         if hasattr(self.dpc, "module"):
             out = self.dpc.module.extract_feature(x)

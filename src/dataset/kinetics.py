@@ -52,6 +52,7 @@ class Kinetics700(Dataset):
         self.clip_len = clip_len
         self.n_clip = n_clip
         self.downsample = downsample
+        self.mode = mode
         assert mode in ("train", "val")
 
         ft_dir = os.path.join(root_path, hdf_path)
@@ -105,15 +106,26 @@ class Kinetics700(Dataset):
         obj = self.data[index]
         path = obj["path"]
         start, end = obj["duration"]
-        frame_indices = range(start, end + 1)
+        frame_indices = range(start, end)
         if self.temporal_transform is not None:
             frame_indices = self.temporal_transform(frame_indices)
             # assert len(frame_indices) == self.clip_len * self.n_clip
-        clip = self.loader(path, frame_indices)
-        if self.spatial_transform is not None:
-            self.spatial_transform.randomize_parameters()
-            clip = torch.stack([self.spatial_transform(img) for img in clip], 1)
-        clip = clipify(clip, self.clip_len)
+        if self.mode == "train":
+            clip = self.loader(path, frame_indices)
+            if self.spatial_transform is not None:
+                self.spatial_transform.randomize_parameters()
+                clip = torch.stack([self.spatial_transform(img) for img in clip], 1)
+            clip = clipify(clip, self.clip_len)
+        elif self.mode == "val":
+            clips = []
+            for clip_frame_indices in frame_indices:
+                clip = self.loader(path, clip_frame_indices)
+                if self.spatial_transform is not None:
+                    self.spatial_transform.randomize_parameters()
+                    clip = torch.stack([self.spatial_transform(img) for img in clip], 1)
+                clip = clipify(clip, self.clip_len)
+                clips.append(clip)
+            clip = torch.stack(clips, 0)
         label = self.classes.index(obj["class"])
         return {"clip": clip, "label": label}
 
@@ -172,7 +184,9 @@ def get_transforms(mode, CONFIG, finetune=False):
         tp_t = temporal_transforms.Compose(
             [
                 temporal_transforms.TemporalSubsampling(CONFIG.downsample),
-                temporal_transforms.SlidingWindow(size=CONFIG.clip_len, stride=4),
+                temporal_transforms.SlidingWindow(
+                    size=CONFIG.clip_len * CONFIG.n_clip, stride=6
+                ),
             ]
         )
     else:

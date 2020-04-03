@@ -40,7 +40,7 @@ def train_epoch(loader, model, optimizer, criterion, device, CONFIG, epoch):
         optimizer.step()
 
         if CONFIG.use_wandb:
-            wandb.log({train_loss.name: train_loss.avg, train_acc.name: train_acc.avg})
+            wandb.log({train_loss.name: train_loss.val, train_acc.name: train_acc.val})
         if it % 100 == 99:
             print(
                 f"epoch {epoch:03d}/{CONFIG.max_epoch:03d} | train | "
@@ -59,11 +59,13 @@ def validate(loader, model, criterion, device, CONFIG, epoch):
     model.eval()
     m = model.module if hasattr(model, "module") else model
     for it, data in enumerate(loader):
-        clip = data["clip"].to(device)
+        # batch size 1
+        clip = data["clip"][0, : CONFIG.finetune_batch_size].to(device)
         label = data["label"].to(device)
 
         with torch.no_grad():
-            out = m(clip)
+            # batch size 1
+            out = m(clip).mean(0).unsqueeze(0)
             loss, losses = criterion(out, label)
 
         val_loss.update(losses["XELoss"])
@@ -77,8 +79,8 @@ def validate(loader, model, criterion, device, CONFIG, epoch):
             )
             val_loss.reset()
             val_acc.reset()
-        # validating for 100 steps is enough
-        if it == 100:
+        # validating for 100 samples is enough
+        if it == 1000:
             break
     if CONFIG.use_wandb:
         wandb.log({val_loss.name: val_loss.avg, val_acc.name: val_acc.avg})
@@ -134,6 +136,8 @@ if __name__ == "__main__":
     saver = ModelSaver(os.path.join(CONFIG.outpath, f"{CONFIG.config_name}_finetune"))
     if opt.resume:
         saver.load_ckpt(model, optimizer)
+    else:
+        saver.epoch = 1
 
     gpu_ids = list(map(str, CONFIG.finetune_gpu_ids))
     os.environ["CUDA_VISIBLE_DEVICES"] = ",".join(gpu_ids)
@@ -187,7 +191,7 @@ if __name__ == "__main__":
     )
     val_dl = DataLoader(
         val_ds,
-        batch_size=CONFIG.finetune_batch_size,
+        batch_size=1,
         shuffle=True,
         num_workers=CONFIG.num_workers,
         collate_fn=collate_fn,

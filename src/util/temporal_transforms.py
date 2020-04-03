@@ -30,12 +30,9 @@ class LoopPadding(object):
         self.size = size
 
     def __call__(self, frame_indices):
-        out = frame_indices
-
-        for index in out:
-            if len(out) >= self.size:
-                break
-        out.append(index)
+        out = []
+        for i in range(self.size):
+            out.append(frame_indices[i % len(frame_indices)])
 
         return out
 
@@ -86,8 +83,7 @@ class TemporalRandomCrop(object):
 
         out = frame_indices[begin_index:end_index]
 
-        if len(out) < self.size:
-            out = self.loop(out)
+        out = self.loop(out)
 
         return out
 
@@ -109,11 +105,7 @@ class TemporalEvenCrop(object):
             end_index = min(frame_indices[-1] + 1, begin_index + self.size)
             sample = list(range(begin_index, end_index))
 
-            if len(sample) < self.size:
-                out.append(self.loop(sample))
-                break
-            else:
-                out.append(sample)
+            out.append(self.loop(sample))
 
         return out
 
@@ -133,11 +125,7 @@ class SlidingWindow(object):
             end_index = min(frame_indices[-1] + 1, begin_index + self.size)
             sample = list(range(begin_index, end_index))
 
-            if len(sample) < self.size:
-                out.append(self.loop(sample))
-                break
-            else:
-                out.append(sample)
+            out.append(self.loop(sample))
 
         return out
 
