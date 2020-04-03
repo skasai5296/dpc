@@ -45,7 +45,8 @@ def train_epoch(loader, model, optimizer, criterion, device, CONFIG, epoch):
             print(
                 f"epoch {epoch:03d}/{CONFIG.max_epoch:03d} | train | "
                 f"{train_timer} | iter {it+1:06d}/{len(loader):06d} | "
-                f"{train_loss} | {train_acc}"
+                f"{train_loss} | {train_acc}",
+                flush=True,
             )
             train_loss.reset()
             train_acc.reset()
@@ -75,7 +76,8 @@ def validate(loader, model, criterion, device, CONFIG, epoch):
             print(
                 f"epoch {epoch:03d}/{CONFIG.max_epoch:03d} | valid | "
                 f"{val_timer} | iter {it+1:06d}/{len(loader):06d} | "
-                f"{val_loss} | {val_acc}"
+                f"{val_loss} | {val_acc}",
+                flush=True,
             )
             val_loss.reset()
             val_acc.reset()
