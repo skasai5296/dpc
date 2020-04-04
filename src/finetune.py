@@ -56,6 +56,7 @@ def validate(loader, model, criterion, device, CONFIG, epoch):
     val_timer = Timer()
     val_loss = AverageMeter("val XEloss")
     val_acc = AverageMeter("val Accuracy")
+    gl_val_loss = AverageMeter("epoch val XELoss")
     gl_val_acc = AverageMeter("epoch val Accuracy")
     model.eval()
     m = model.module if hasattr(model, "module") else model
@@ -85,7 +86,7 @@ def validate(loader, model, criterion, device, CONFIG, epoch):
         if it == 1000:
             break
     if CONFIG.use_wandb:
-        wandb.log({val_loss.name: val_loss.avg, val_acc.name: val_acc.avg})
+        wandb.log({gl_val_loss.name: gl_val_loss.avg, gl_val_acc.name: gl_val_acc.avg})
     return gl_val_acc.avg
 
 
