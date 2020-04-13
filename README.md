@@ -11,20 +11,29 @@ python>=3.7
 numpy
 matplotlib
 pytorch>=1.3.0
-torchvision>=0.5.0
-Pillow
+torchvision>=0.4.0
+Pillow=6.1
 addict
 pyyaml
 h5py (for converting .jpg files to .hdf5)
+```
+
+Optional:--
+```
 wandb
 ffmpeg (for converting .mp4 files to .jpg)
 joblib (for parallel conversions of .mp4 files to .jpg)
 ```
 
-
 ### For Anaconda Users
-- `environment.yml` file contains environment details for Anaconda users.
-- run `conda env create -f environment.yml && conda activate dpc` for simple use.
+```
+conda create --name dpc python=3.7 numpy matplotlib pytorch torchvision Pillow=6.1 h5py
+conda activate dpc
+conda install -yc conda-forge addict pyyaml
+pip install wandb
+
+(optional) conda install -yc conda-forge black isort autopep8 flake8 pylint
+```
 
 ## Preparation of Dataset
 - Download Kinetics 700 mp4 files
