@@ -3,12 +3,12 @@ import os
 from pprint import pprint
 
 import torch
+import wandb
 import yaml
 from addict import Dict
 from torch import nn, optim
 from torch.utils.data import DataLoader
 
-import wandb
 from dataset.kinetics import Kinetics700, collate_fn, get_transforms
 from model.criterion import DPCClassificationLoss
 from model.model import DPCClassification
@@ -72,6 +72,7 @@ def validate(loader, model, criterion, device, CONFIG, epoch):
 
         val_loss.update(losses["XELoss"])
         val_acc.update(losses["Accuracy (%)"])
+        gl_val_loss.update(losses["XELoss"])
         gl_val_acc.update(losses["Accuracy (%)"])
         if it % 100 == 99:
             print(

@@ -3,12 +3,12 @@ import os
 from pprint import pprint
 
 import torch
+import wandb
 import yaml
 from addict import Dict
 from torch import nn, optim
 from torch.utils.data import DataLoader
 
-import wandb
 from dataset.kinetics import Kinetics700, collate_fn, get_transforms
 from model.criterion import DPCLoss
 from model.model import DPC
@@ -64,11 +64,12 @@ def validate(loader, model, criterion, device, CONFIG, epoch):
 
         val_loss.update(losses["XELoss"])
         val_acc.update(losses["Accuracy (%)"])
+        gl_val_loss.update(losses["XELoss"])
+        gl_val_acc.update(losses["Accuracy (%)"])
         if it % 10 == 9:
-            lossstr = " | ".join([f"{name}: {val:7f}" for name, val in losses.items()])
             print(
                 f"epoch {epoch:03d}/{CONFIG.max_epoch:03d} | valid | "
-                f"{val_timer} | iter {it+1:06d}/{len(loader):06d} | {lossstr}",
+                f"{val_timer} | iter {it+1:06d}/{len(loader):06d} | "
                 f"{val_loss} | {val_acc}",
                 flush=True,
             )
@@ -158,6 +159,7 @@ if __name__ == "__main__":
         downsample=CONFIG.downsample,
         spatial_transform=sp_t,
         temporal_transform=tp_t,
+        mode="train",
     )
     sp_t, tp_t = get_transforms("val", CONFIG)
     val_ds = Kinetics700(
@@ -169,6 +171,7 @@ if __name__ == "__main__":
         downsample=CONFIG.downsample,
         spatial_transform=sp_t,
         temporal_transform=tp_t,
+        mode="val",
     )
     train_dl = DataLoader(
         train_ds,

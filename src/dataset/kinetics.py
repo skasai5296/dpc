@@ -45,6 +45,7 @@ class Kinetics700(Dataset):
         spatial_transform,
         temporal_transform,
         mode="train",
+        return_clips=False,
     ):
         self.loader = VideoLoaderHDF5()
         self.spatial_transform = spatial_transform
@@ -53,6 +54,7 @@ class Kinetics700(Dataset):
         self.n_clip = n_clip
         self.downsample = downsample
         self.mode = mode
+        self.return_clips = return_clips
         assert mode in ("train", "val")
 
         ft_dir = os.path.join(root_path, hdf_path)
@@ -110,13 +112,13 @@ class Kinetics700(Dataset):
         if self.temporal_transform is not None:
             frame_indices = self.temporal_transform(frame_indices)
             # assert len(frame_indices) == self.clip_len * self.n_clip
-        if self.mode == "train":
+        if not self.return_clips:
             clip = self.loader(path, frame_indices)
             if self.spatial_transform is not None:
                 self.spatial_transform.randomize_parameters()
                 clip = torch.stack([self.spatial_transform(img) for img in clip], 1)
             clip = clipify(clip, self.clip_len)
-        elif self.mode == "val":
+        else:
             clips = []
             for clip_frame_indices in frame_indices:
                 clip = self.loader(path, clip_frame_indices)
@@ -216,7 +218,7 @@ def collate_fn(datalist):
 
 if __name__ == "__main__":
     cfg_path = "../cfg/debug.yml"
-    CONFIG = Dict(yaml.safe_load(open(opt.config)))
+    CONFIG = Dict(yaml.safe_load(open(cfg_path)))
     mean, std = get_stats()
     sp_t, tp_t = get_transforms("train", CONFIG)
     ds = Kinetics700(
