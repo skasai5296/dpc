@@ -118,6 +118,7 @@ if __name__ == "__main__":
             project=CONFIG.project_name,
         )
 
+    """  Model Components  """
     model = DPCClassification(
         CONFIG.input_size,
         CONFIG.hidden_size,
@@ -128,20 +129,35 @@ if __name__ == "__main__":
         CONFIG.finetune_dropout,
         700,
     )
-    saver = ModelSaver(os.path.join(CONFIG.outpath, CONFIG.config_name))
-    saver.load_ckpt(model, optimizer=None, start_epoch=CONFIG.finetune_from)
 
+    """  Load Pretrained Weights  """
+    saver = ModelSaver(os.path.join(CONFIG.outpath, CONFIG.config_name))
+    saver.load_ckpt(
+        model, optimizer=None, scheduler=None, start_epoch=CONFIG.finetune_from
+    )
+
+    """  Model Components  """
+    criterion = DPCClassificationLoss()
     optimizer = optim.Adam(
         model.parameters(),
         lr=CONFIG.finetune_lr,
         weight_decay=CONFIG.finetune_weight_decay,
     )
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer,
+        mode="max",
+        factor=CONFIG.finetune_dampening_rate,
+        patience=CONFIG.finetune_patience,
+    )
+
+    """  Load from Checkpoint  """
     saver = ModelSaver(os.path.join(CONFIG.outpath, f"{CONFIG.config_name}_finetune"))
     if opt.resume:
-        saver.load_ckpt(model, optimizer)
+        saver.load_ckpt(model, optimizer, scheduler)
     else:
         saver.epoch = 1
 
+    """  Devices  """
     gpu_ids = list(map(str, CONFIG.finetune_gpu_ids))
     os.environ["CUDA_VISIBLE_DEVICES"] = ",".join(gpu_ids)
     if torch.cuda.is_available():
@@ -150,9 +166,7 @@ if __name__ == "__main__":
     else:
         device = torch.device("cpu")
         print("using CPU")
-
     model = model.to(device)
-    criterion = DPCClassificationLoss()
     # for sending pretrained weights to GPU for optimizer
     for state in optimizer.state.values():
         for k, v in state.items():
@@ -161,6 +175,7 @@ if __name__ == "__main__":
     if torch.cuda.device_count() > 1:
         model = nn.DataParallel(model)
 
+    """  Dataset  """
     sp_t, tp_t = get_transforms("train", CONFIG)
     train_ds = Kinetics700(
         CONFIG.data_path,
@@ -199,13 +214,20 @@ if __name__ == "__main__":
         num_workers=CONFIG.num_workers,
         collate_fn=collate_fn,
     )
+
+    """  Training Loop  """
     for ep in range(saver.epoch, CONFIG.max_epoch):
         print(f"global time {global_timer} | start training epoch {ep}")
         train_epoch(train_dl, model, optimizer, criterion, device, CONFIG, ep)
         print(f"global time {global_timer} | start validation epoch {ep}")
         val_acc = validate(val_dl, model, criterion, device, CONFIG, ep)
+        scheduler.step(val_acc)
         saver.save_ckpt_if_best(
-            model, optimizer, val_acc, delete_prev=CONFIG.only_best_checkpoint
+            model,
+            optimizer,
+            scheduler,
+            val_acc,
+            delete_prev=CONFIG.only_best_checkpoint,
         )
         print(
             f"global time {global_timer} | val accuracy: {val_acc:.5f}% | "

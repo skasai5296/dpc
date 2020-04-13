@@ -20,6 +20,8 @@ def train_epoch(loader, model, optimizer, criterion, device, CONFIG, epoch):
     train_timer = Timer()
     model.train()
     m = model.module if hasattr(model, "module") else model
+    train_loss = AverageMeter("train XEloss")
+    train_acc = AverageMeter("train Accuracy")
     for it, data in enumerate(loader):
         clip = data["clip"].to(device)
 
@@ -33,13 +35,12 @@ def train_epoch(loader, model, optimizer, criterion, device, CONFIG, epoch):
         optimizer.step()
 
         if CONFIG.use_wandb:
-            wandb.log({f"train {name}": val for name, val in losses.items()})
+            wandb.log({train_loss.name: train_loss.val, train_acc.name: train_acc.val})
         if it % 10 == 9:
-            lossstr = " | ".join([f"{name}: {val:7f}" for name, val in losses.items()])
             print(
                 f"epoch {epoch:03d}/{CONFIG.max_epoch:03d} | train | "
                 f"{train_timer} | iter {it+1:06d}/{len(loader):06d} | "
-                f"{lossstr}",
+                f"{train_loss} | {train_acc}",
                 flush=True,
             )
 
@@ -48,6 +49,8 @@ def validate(loader, model, criterion, device, CONFIG, epoch):
     val_timer = Timer()
     val_loss = AverageMeter("validation loss")
     val_acc = AverageMeter("validation accuracy")
+    gl_val_loss = AverageMeter("epoch val XELoss")
+    gl_val_acc = AverageMeter("epoch val Accuracy")
     model.eval()
     m = model.module if hasattr(model, "module") else model
     for it, data in enumerate(loader):
@@ -64,14 +67,17 @@ def validate(loader, model, criterion, device, CONFIG, epoch):
             print(
                 f"epoch {epoch:03d}/{CONFIG.max_epoch:03d} | valid | "
                 f"{val_timer} | iter {it+1:06d}/{len(loader):06d} | {lossstr}",
+                f"{val_loss} | {val_acc}",
                 flush=True,
             )
+            val_loss.reset()
+            val_acc.reset()
         # validating for 100 steps is enough
         if it == 100:
             break
     if CONFIG.use_wandb:
-        wandb.log({f"val {name}": val for name, val in losses.items()})
-    return val_acc.avg
+        wandb.log({gl_val_loss.name: gl_val_loss.avg, gl_val_acc.name: gl_val_acc.avg})
+    return gl_val_acc.avg
 
 
 if __name__ == "__main__":
@@ -98,6 +104,7 @@ if __name__ == "__main__":
     if CONFIG.use_wandb:
         wandb.init(name=CONFIG.config_name, config=CONFIG, project=CONFIG.project_name)
 
+    """  Model Components  """
     model = DPC(
         CONFIG.input_size,
         CONFIG.hidden_size,
@@ -107,13 +114,20 @@ if __name__ == "__main__":
         CONFIG.pred_step,
         CONFIG.dropout,
     )
-    saver = ModelSaver(os.path.join(CONFIG.outpath, CONFIG.config_name))
+    criterion = DPCLoss()
     optimizer = optim.Adam(
         model.parameters(), lr=CONFIG.lr, weight_decay=CONFIG.weight_decay
     )
-    if opt.resume:
-        saver.load_ckpt(model, optimizer)
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer, mode="max", factor=CONFIG.dampening_rate, patience=CONFIG.patience,
+    )
 
+    """  Load from Checkpoint  """
+    saver = ModelSaver(os.path.join(CONFIG.outpath, CONFIG.config_name))
+    if opt.resume:
+        saver.load_ckpt(model, optimizer, scheduler)
+
+    """  Devices  """
     gpu_ids = list(map(str, CONFIG.gpu_ids))
     os.environ["CUDA_VISIBLE_DEVICES"] = ",".join(gpu_ids)
     if torch.cuda.is_available():
@@ -122,7 +136,6 @@ if __name__ == "__main__":
     else:
         device = torch.device("cpu")
         print("using CPU")
-
     model = model.to(device)
     # for sending pretrained weights to GPU for optimizer
     for state in optimizer.state.values():
@@ -132,6 +145,7 @@ if __name__ == "__main__":
     if torch.cuda.device_count() > 1:
         model = nn.DataParallel(model)
 
+    """  Dataset  """
     sp_t, tp_t = get_transforms("train", CONFIG)
     train_ds = Kinetics700(
         CONFIG.data_path,
@@ -168,14 +182,20 @@ if __name__ == "__main__":
         num_workers=CONFIG.num_workers,
         collate_fn=collate_fn,
     )
-    criterion = DPCLoss()
+
+    """  Training Loop  """
     for ep in range(saver.epoch, CONFIG.max_epoch):
         print(f"global time {global_timer} | start training epoch {ep}")
         train_epoch(train_dl, model, optimizer, criterion, device, CONFIG, ep)
         print(f"global time {global_timer} | start validation epoch {ep}")
         val_acc = validate(val_dl, model, criterion, device, CONFIG, ep)
+        scheduler.step(val_acc)
         saver.save_ckpt_if_best(
-            model, optimizer, val_acc, delete_prev=CONFIG.only_best_checkpoint
+            model,
+            optimizer,
+            scheduler,
+            val_acc,
+            delete_prev=CONFIG.only_best_checkpoint,
         )
         print(
             f"global time {global_timer} | val accuracy: {val_acc:.5f}% | "

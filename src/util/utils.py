@@ -21,7 +21,7 @@ class ModelSaver:
         self.best = init_val
         self.epoch = 1
 
-    def load_ckpt(self, model, optimizer=None, start_epoch=None):
+    def load_ckpt(self, model, optimizer=None, scheduler=None, start_epoch=None):
         try:
             if start_epoch is None:
                 path = sorted(glob.glob(os.path.join(self.savedir, "*.ckpt")))[-1]
@@ -38,6 +38,8 @@ class ModelSaver:
             model.load_state_dict(ckpt["model"], strict=False)
             if optimizer is not None:
                 optimizer.load_state_dict(ckpt["optimizer"])
+            if scheduler is not None:
+                scheduler.load_state_dict(ckpt["optimizer"])
             self.best = ckpt["bestscore"]
             self.epoch = ckpt["epoch"] + 1
             print(
@@ -47,7 +49,7 @@ class ModelSaver:
         else:
             print(f"{path} does not exist, not loading")
 
-    def save_ckpt_if_best(self, model, optimizer, metric, delete_prev=False):
+    def save_ckpt_if_best(self, model, optimizer, scheduler, metric, delete_prev=False):
         if delete_prev:
             for file in glob.glob(os.path.join(self.savedir, "*.ckpt")):
                 os.remove(file)
@@ -58,7 +60,10 @@ class ModelSaver:
                 + f"{self.best}, saving to {path}"
             )
             self.best = metric
-            ckpt = {"optimizer": optimizer.state_dict()}
+            ckpt = {
+                "optimizer": optimizer.state_dict(),
+                "scheduler": scheduler.state_dict(),
+            }
             if hasattr(model, "module"):
                 ckpt["model"] = model.module.state_dict()
             else:
