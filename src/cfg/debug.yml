@@ -1,0 +1,35 @@
+use_wandb: true
+project_name: DPC
+config_name: debug
+
+data_path: /home/seito/ssd2/kinetics/
+video_path: videos_700_hdf5
+ann_path: kinetics-700-hdf5.json
+only_best_checkpoint: false
+clip_len: 5
+n_clip: 8
+downsample: 3
+pred_step: 3
+input_size: 512
+hidden_size: 512
+kernel_size: 1
+num_layers: 1
+resize: 112
+batch_size: 32
+max_epoch: 20
+num_workers: 4
+outpath: out
+gpu_ids: [0, 1]
+dropout: 0.1
+lr: 0.001
+weight_decay: 0.00001
+grad_clip: 0.
+
+# from which epoch to start finetuning, set to None for newest
+finetune_gpu_ids: [0]
+finetune_from:
+finetune_batch_size: 16
+finetune_lr: 0.001
+finetune_weight_decay: 0.00001
+finetune_dropout: 0.1
+finetune_grad_clip: 0.

@@ -1,0 +1,26 @@
+use_wandb: true
+project_name: DPC
+config_name: im224_bs8
+
+data_path: /home/seito/ssd2/kinetics/
+video_path: videos_700_hdf5
+ann_path: kinetics-700-hdf5.json
+only_best_checkpoint: false
+clip_len: 5
+n_clip: 8
+downsample: 3
+pred_step: 3
+input_size: 512
+hidden_size: 512
+kernel_size: 1
+num_layers: 1
+resize: 224
+batch_size: 8
+max_epoch: 20
+num_workers: 4
+outpath: out
+gpu_ids: [0, 1]
+dropout: 0.1
+lr: 0.001
+weight_decay: 0.00001
+grad_clip: 0.
