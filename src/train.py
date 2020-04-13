@@ -43,6 +43,8 @@ def train_epoch(loader, model, optimizer, criterion, device, CONFIG, epoch):
                 f"{train_loss} | {train_acc}",
                 flush=True,
             )
+            train_loss.reset()
+            train_acc.reset()
 
 
 def validate(loader, model, criterion, device, CONFIG, epoch):
@@ -119,7 +121,7 @@ if __name__ == "__main__":
         model.parameters(), lr=CONFIG.lr, weight_decay=CONFIG.weight_decay
     )
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer, mode="max", factor=CONFIG.dampening_rate, patience=CONFIG.patience,
+        optimizer, mode="max", factor=CONFIG.dampening_rate, patience=CONFIG.patience
     )
 
     """  Load from Checkpoint  """
