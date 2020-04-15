@@ -1,4 +1,4 @@
-use_wandb: true
+use_wandb: false
 project_name: DPC
 config_name: debug
 
@@ -17,7 +17,7 @@ num_layers: 1
 resize: 112
 batch_size: 32
 max_epoch: 20
-num_workers: 4
+num_workers: 0
 outpath: out
 gpu_ids: [0, 1]
 dropout: 0.1
@@ -28,9 +28,9 @@ dampening_rate: 0.1
 patience: 5
 
 # from which epoch to start finetuning, set to None for newest
-finetune_gpu_ids: [0]
+finetune_gpu_ids: [0, 1]
 finetune_from:
-finetune_batch_size: 16
+finetune_batch_size: 32
 finetune_lr: 0.001
 finetune_weight_decay: 0.00001
 finetune_dropout: 0.1

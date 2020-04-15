@@ -3,12 +3,12 @@ import os
 from pprint import pprint
 
 import torch
-import wandb
 import yaml
 from addict import Dict
 from torch import nn, optim
 from torch.utils.data import DataLoader
 
+import wandb
 from dataset.kinetics import Kinetics700, collate_fn, get_transforms
 from model.criterion import DPCClassificationLoss
 from model.model import DPCClassification
@@ -19,7 +19,6 @@ from util.utils import AverageMeter, ModelSaver, Timer
 def train_epoch(loader, model, optimizer, criterion, device, CONFIG, epoch):
     train_timer = Timer()
     model.train()
-    m = model.module if hasattr(model, "module") else model
     train_loss = AverageMeter("train XEloss")
     train_acc = AverageMeter("train Accuracy")
     for it, data in enumerate(loader):
@@ -27,7 +26,7 @@ def train_epoch(loader, model, optimizer, criterion, device, CONFIG, epoch):
         label = data["label"].to(device)
 
         optimizer.zero_grad()
-        out = m(clip)
+        out = model(clip)
         loss, losses = criterion(out, label)
 
         train_loss.update(losses["XELoss"])
@@ -67,7 +66,7 @@ def validate(loader, model, criterion, device, CONFIG, epoch):
 
         with torch.no_grad():
             # batch size 1
-            out = m(clip).mean(0).unsqueeze(0)
+            out = model(clip).mean(0).unsqueeze(0)
             loss, losses = criterion(out, label)
 
         val_loss.update(losses["XELoss"])

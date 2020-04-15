@@ -1,7 +1,7 @@
 # My own ignores
 out
 src/cfg/*
-!src/cfg/debug.yml
+!src/cfg/default.yml
 wandb
 nohup.out
 

@@ -3,12 +3,12 @@ import os
 from pprint import pprint
 
 import torch
-import wandb
 import yaml
 from addict import Dict
 from torch import nn, optim
 from torch.utils.data import DataLoader
 
+import wandb
 from dataset.kinetics import Kinetics700, collate_fn, get_transforms
 from model.criterion import DPCLoss
 from model.model import DPC
@@ -19,14 +19,13 @@ from util.utils import AverageMeter, ModelSaver, Timer
 def train_epoch(loader, model, optimizer, criterion, device, CONFIG, epoch):
     train_timer = Timer()
     model.train()
-    m = model.module if hasattr(model, "module") else model
     train_loss = AverageMeter("train XEloss")
     train_acc = AverageMeter("train Accuracy")
     for it, data in enumerate(loader):
         clip = data["clip"].to(device)
 
         optimizer.zero_grad()
-        pred, gt = m(clip)
+        pred, gt = model(clip)
         loss, losses = criterion(pred, gt)
 
         train_loss.update(losses["XELoss"])
@@ -61,7 +60,7 @@ def validate(loader, model, criterion, device, CONFIG, epoch):
         clip = data["clip"].to(device)
 
         with torch.no_grad():
-            pred, gt = m(clip)
+            pred, gt = model(clip)
             loss, losses = criterion(pred, gt)
 
         val_loss.update(losses["XELoss"])
@@ -124,7 +123,11 @@ if __name__ == "__main__":
         model.parameters(), lr=CONFIG.lr, weight_decay=CONFIG.weight_decay
     )
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer, mode="max", factor=CONFIG.dampening_rate, patience=CONFIG.patience
+        optimizer,
+        mode="max",
+        factor=CONFIG.dampening_rate,
+        patience=CONFIG.patience,
+        verbose=True,
     )
 
     """  Load from Checkpoint  """
@@ -196,6 +199,8 @@ if __name__ == "__main__":
         train_epoch(train_dl, model, optimizer, criterion, device, CONFIG, ep)
         print(f"global time {global_timer} | start validation epoch {ep}")
         val_acc = validate(val_dl, model, criterion, device, CONFIG, ep)
+        if CONFIG.use_wandb:
+            wandb.log({"learning_rate": optimizer.param_groups[0]["lr"]})
         scheduler.step(val_acc)
         saver.save_ckpt_if_best(
             model,
