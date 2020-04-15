@@ -54,6 +54,7 @@ class Kinetics700(Dataset):
         self.n_clip = n_clip
         self.downsample = downsample
         self.mode = mode
+        self.return_clips = return_clips
         assert mode in ("train", "val")
         self.return_clips = return_clips
 
@@ -218,7 +219,7 @@ def collate_fn(datalist):
 
 if __name__ == "__main__":
     cfg_path = "../cfg/debug.yml"
-    CONFIG = Dict(yaml.safe_load(open(opt.config)))
+    CONFIG = Dict(yaml.safe_load(open(cfg_path)))
     mean, std = get_stats()
     sp_t, tp_t = get_transforms("train", CONFIG)
     ds = Kinetics700(

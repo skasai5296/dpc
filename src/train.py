@@ -19,7 +19,6 @@ from util.utils import AverageMeter, ModelSaver, Timer
 def train_epoch(loader, model, optimizer, criterion, device, CONFIG, epoch):
     train_timer = Timer()
     model.train()
-    m = model.module if hasattr(model, "module") else model
     train_loss = AverageMeter("train XEloss")
     train_acc = AverageMeter("train Accuracy")
     for it, data in enumerate(loader):
@@ -33,7 +32,9 @@ def train_epoch(loader, model, optimizer, criterion, device, CONFIG, epoch):
         train_acc.update(losses["Accuracy (%)"])
         loss.backward()
         if CONFIG.grad_clip > 0:
-            torch.nn.utils.clip_grad_norm_(m.parameters(), max_norm=CONFIG.grad_clip)
+            torch.nn.utils.clip_grad_norm_(
+                model.parameters(), max_norm=CONFIG.grad_clip
+            )
         optimizer.step()
 
         if CONFIG.use_wandb:
@@ -57,7 +58,6 @@ def validate(loader, model, criterion, device, CONFIG, epoch):
     gl_val_loss = AverageMeter("epoch val XELoss")
     gl_val_acc = AverageMeter("epoch val Accuracy")
     model.eval()
-    m = model.module if hasattr(model, "module") else model
     for it, data in enumerate(loader):
         clip = data["clip"].to(device)
 
@@ -67,6 +67,8 @@ def validate(loader, model, criterion, device, CONFIG, epoch):
 
         val_loss.update(losses["XELoss"])
         val_acc.update(losses["Accuracy (%)"])
+
+        gl_val_loss.update(losses["XELoss"])
         gl_val_acc.update(losses["Accuracy (%)"])
         if it % 10 == 9:
             print(
@@ -124,7 +126,11 @@ if __name__ == "__main__":
         model.parameters(), lr=CONFIG.lr, weight_decay=CONFIG.weight_decay
     )
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer, mode="max", factor=CONFIG.dampening_rate, patience=CONFIG.patience,
+        optimizer,
+        mode="max",
+        factor=CONFIG.dampening_rate,
+        patience=CONFIG.patience,
+        verbose=True,
     )
 
     """  Load from Checkpoint  """
@@ -196,6 +202,8 @@ if __name__ == "__main__":
         train_epoch(train_dl, model, optimizer, criterion, device, CONFIG, ep)
         print(f"global time {global_timer} | start validation epoch {ep}")
         val_acc = validate(val_dl, model, criterion, device, CONFIG, ep)
+        if CONFIG.use_wandb:
+            wandb.log({"learning_rate": optimizer.param_groups[0]["lr"]})
         scheduler.step(val_acc)
         saver.save_ckpt_if_best(
             model,

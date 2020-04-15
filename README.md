@@ -18,7 +18,7 @@ pyyaml
 h5py (for converting .jpg files to .hdf5)
 ```
 
-Optional:--
+Optional:
 ```
 wandb
 ffmpeg (for converting .mp4 files to .jpg)
@@ -40,11 +40,11 @@ pip install wandb
 - Prepare HDF5 files for Kinetics 700 using `src/util/convert_mp4_hdf5.py`
 
 ## Training and validation
-Run `python train.py` (by default, the system uses cfg/debug.yml as configuration for hyperparameters)
+Run `python train.py` (by default, the system uses cfg/debug.yml as configuration for hyperparameters)\
 For custom configuration, use `python train.py --config ${PATH_TO_YOUR_CUSTOM_CONFIG}`
 
 ## Evaluation
 
 ## Description
-This repository contains the implementation of dense predictive coding.
+This repository contains the implementation of dense predictive coding.\
 Training and Evaluation is done on the Kinetics 700 dataset.
