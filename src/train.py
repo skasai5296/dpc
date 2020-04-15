@@ -29,6 +29,8 @@ def train_epoch(loader, model, optimizer, criterion, device, CONFIG, epoch):
         pred, gt = model(clip)
         loss, losses = criterion(pred, gt)
 
+        train_loss.update(losses["XELoss"])
+        train_acc.update(losses["Accuracy (%)"])
         loss.backward()
         if CONFIG.grad_clip > 0:
             torch.nn.utils.clip_grad_norm_(m.parameters(), max_norm=CONFIG.grad_clip)
