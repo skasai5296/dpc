@@ -94,7 +94,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--config",
         type=str,
-        default="cfg/debug.yml",
+        default="cfg/default.yml",
         help="path to configuration yml file",
     )
     parser.add_argument(
