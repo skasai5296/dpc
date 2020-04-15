@@ -26,7 +26,7 @@ def train_epoch(loader, model, optimizer, criterion, device, CONFIG, epoch):
         clip = data["clip"].to(device)
 
         optimizer.zero_grad()
-        pred, gt = model(clip)
+        pred, gt = m(clip)
         loss, losses = criterion(pred, gt)
 
         train_loss.update(losses["XELoss"])
@@ -61,7 +61,7 @@ def validate(loader, model, criterion, device, CONFIG, epoch):
         clip = data["clip"].to(device)
 
         with torch.no_grad():
-            pred, gt = model(clip)
+            pred, gt = m(clip)
             loss, losses = criterion(pred, gt)
 
         val_loss.update(losses["XELoss"])
