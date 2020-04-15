@@ -36,10 +36,10 @@ class ModelSaver:
             print(f"loading model from {path}")
             ckpt = torch.load(path, map_location="cpu")
             model.load_state_dict(ckpt["model"], strict=False)
-            if optimizer is not None:
+            if optimizer is not None and "optimizer" in ckpt.items():
                 optimizer.load_state_dict(ckpt["optimizer"])
-            if scheduler is not None:
-                scheduler.load_state_dict(ckpt["optimizer"])
+            if scheduler is not None and "scheduler" in ckpt.items():
+                scheduler.load_state_dict(ckpt["scheduler"])
             self.best = ckpt["bestscore"]
             self.epoch = ckpt["epoch"] + 1
             print(

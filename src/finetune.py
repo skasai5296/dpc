@@ -199,6 +199,7 @@ if __name__ == "__main__":
         spatial_transform=sp_t,
         temporal_transform=tp_t,
         mode="val",
+        return_clips=True,
     )
     train_dl = DataLoader(
         train_ds,

@@ -29,6 +29,8 @@ def train_epoch(loader, model, optimizer, criterion, device, CONFIG, epoch):
         pred, gt = model(clip)
         loss, losses = criterion(pred, gt)
 
+        train_loss.update(losses["XELoss"])
+        train_acc.update(losses["Accuracy (%)"])
         loss.backward()
         if CONFIG.grad_clip > 0:
             torch.nn.utils.clip_grad_norm_(m.parameters(), max_norm=CONFIG.grad_clip)
@@ -43,6 +45,9 @@ def train_epoch(loader, model, optimizer, criterion, device, CONFIG, epoch):
                 f"{train_loss} | {train_acc}",
                 flush=True,
             )
+            train_loss.reset()
+            train_acc.reset()
+            break
 
 
 def validate(loader, model, criterion, device, CONFIG, epoch):
@@ -62,11 +67,11 @@ def validate(loader, model, criterion, device, CONFIG, epoch):
 
         val_loss.update(losses["XELoss"])
         val_acc.update(losses["Accuracy (%)"])
+        gl_val_acc.update(losses["Accuracy (%)"])
         if it % 10 == 9:
-            lossstr = " | ".join([f"{name}: {val:7f}" for name, val in losses.items()])
             print(
                 f"epoch {epoch:03d}/{CONFIG.max_epoch:03d} | valid | "
-                f"{val_timer} | iter {it+1:06d}/{len(loader):06d} | {lossstr}",
+                f"{val_timer} | iter {it+1:06d}/{len(loader):06d} | "
                 f"{val_loss} | {val_acc}",
                 flush=True,
             )
@@ -156,6 +161,7 @@ if __name__ == "__main__":
         downsample=CONFIG.downsample,
         spatial_transform=sp_t,
         temporal_transform=tp_t,
+        mode="train",
     )
     sp_t, tp_t = get_transforms("val", CONFIG)
     val_ds = Kinetics700(
@@ -167,6 +173,7 @@ if __name__ == "__main__":
         downsample=CONFIG.downsample,
         spatial_transform=sp_t,
         temporal_transform=tp_t,
+        mode="val",
     )
     train_dl = DataLoader(
         train_ds,
@@ -177,7 +184,7 @@ if __name__ == "__main__":
     )
     val_dl = DataLoader(
         val_ds,
-        batch_size=CONFIG.batch_size,
+        batch_size=CONFIG.batch_size * 2,
         shuffle=True,
         num_workers=CONFIG.num_workers,
         collate_fn=collate_fn,
