@@ -58,7 +58,6 @@ def validate(loader, model, criterion, device, CONFIG, epoch):
     gl_val_loss = AverageMeter("epoch val XELoss")
     gl_val_acc = AverageMeter("epoch val Accuracy")
     model.eval()
-    m = model.module if hasattr(model, "module") else model
     for it, data in enumerate(loader):
         # batch size 1
         clip = data["clip"][0, : CONFIG.finetune_batch_size].to(device)
@@ -217,7 +216,7 @@ if __name__ == "__main__":
     )
 
     """  Training Loop  """
-    for ep in range(saver.epoch, CONFIG.max_epoch):
+    for ep in range(saver.epoch, CONFIG.max_epoch + 1):
         print(f"global time {global_timer} | start training epoch {ep}")
         train_epoch(train_dl, model, optimizer, criterion, device, CONFIG, ep)
         print(f"global time {global_timer} | start validation epoch {ep}")
