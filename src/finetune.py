@@ -3,12 +3,12 @@ import os
 from pprint import pprint
 
 import torch
+import wandb
 import yaml
 from addict import Dict
 from torch import nn, optim
 from torch.utils.data import DataLoader
 
-import wandb
 from dataset.kinetics import Kinetics700, collate_fn, get_transforms
 from model.criterion import DPCClassificationLoss
 from model.model import DPCClassification
@@ -33,9 +33,7 @@ def train_epoch(loader, model, optimizer, criterion, device, CONFIG, epoch):
         train_acc.update(losses["Accuracy (%)"])
         loss.backward()
         if CONFIG.finetune_grad_clip > 0:
-            torch.nn.utils.clip_grad_norm_(
-                m.parameters(), max_norm=CONFIG.finetune_grad_clip
-            )
+            torch.nn.utils.clip_grad_norm_(m.parameters(), max_norm=CONFIG.finetune_grad_clip)
         optimizer.step()
 
         if CONFIG.use_wandb:
@@ -94,15 +92,10 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--config",
-        type=str,
-        default="cfg/default.yml",
-        help="path to configuration yml file",
+        "--config", type=str, default="cfg/default.yml", help="path to configuration yml file",
     )
     parser.add_argument(
-        "--resume",
-        action="store_true",
-        help="denotes if to continue training, will use config",
+        "--resume", action="store_true", help="denotes if to continue training, will use config",
     )
     opt = parser.parse_args()
     print(f"loading configuration from {opt.config}")
@@ -112,9 +105,7 @@ if __name__ == "__main__":
 
     if CONFIG.use_wandb:
         wandb.init(
-            name=f"{CONFIG.config_name}_finetune",
-            config=CONFIG,
-            project=CONFIG.project_name,
+            name=f"{CONFIG.config_name}_finetune", config=CONFIG, project=CONFIG.project_name,
         )
 
     """  Model Components  """
@@ -131,16 +122,12 @@ if __name__ == "__main__":
 
     """  Load Pretrained Weights  """
     saver = ModelSaver(os.path.join(CONFIG.outpath, CONFIG.config_name))
-    saver.load_ckpt(
-        model, optimizer=None, scheduler=None, start_epoch=CONFIG.finetune_from
-    )
+    saver.load_ckpt(model, optimizer=None, scheduler=None, start_epoch=CONFIG.finetune_from)
 
     """  Model Components  """
     criterion = DPCClassificationLoss()
     optimizer = optim.Adam(
-        model.parameters(),
-        lr=CONFIG.finetune_lr,
-        weight_decay=CONFIG.finetune_weight_decay,
+        model.parameters(), lr=CONFIG.finetune_lr, weight_decay=CONFIG.finetune_weight_decay,
     )
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(
         optimizer,
@@ -208,11 +195,7 @@ if __name__ == "__main__":
         collate_fn=collate_fn,
     )
     val_dl = DataLoader(
-        val_ds,
-        batch_size=1,
-        shuffle=True,
-        num_workers=CONFIG.num_workers,
-        collate_fn=collate_fn,
+        val_ds, batch_size=1, shuffle=True, num_workers=CONFIG.num_workers, collate_fn=collate_fn,
     )
 
     """  Training Loop  """
@@ -223,13 +206,6 @@ if __name__ == "__main__":
         val_acc = validate(val_dl, model, criterion, device, CONFIG, ep)
         scheduler.step(val_acc)
         saver.save_ckpt_if_best(
-            model,
-            optimizer,
-            scheduler,
-            val_acc,
-            delete_prev=CONFIG.only_best_checkpoint,
+            model, optimizer, scheduler, val_acc, delete_prev=CONFIG.only_best_checkpoint,
         )
-        print(
-            f"global time {global_timer} | val accuracy: {val_acc:.5f}% | "
-            f"end epoch {ep}"
-        )
+        print(f"global time {global_timer} | val accuracy: {val_acc:.5f}% | " f"end epoch {ep}")

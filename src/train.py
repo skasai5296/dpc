@@ -3,12 +3,12 @@ import os
 from pprint import pprint
 
 import torch
+import wandb
 import yaml
 from addict import Dict
 from torch import nn, optim
 from torch.utils.data import DataLoader
 
-import wandb
 from dataset.kinetics import Kinetics700, collate_fn, get_transforms
 from model.criterion import DPCLoss
 from model.model import DPC
@@ -32,9 +32,7 @@ def train_epoch(loader, model, optimizer, criterion, device, CONFIG, epoch):
         train_acc.update(losses["Accuracy (%)"])
         loss.backward()
         if CONFIG.grad_clip > 0:
-            torch.nn.utils.clip_grad_norm_(
-                model.parameters(), max_norm=CONFIG.grad_clip
-            )
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=CONFIG.grad_clip)
         optimizer.step()
 
         if CONFIG.use_wandb:
@@ -92,15 +90,10 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--config",
-        type=str,
-        default="cfg/default.yml",
-        help="path to configuration yml file",
+        "--config", type=str, default="cfg/default.yml", help="path to configuration yml file",
     )
     parser.add_argument(
-        "--resume",
-        action="store_true",
-        help="denotes if to continue training, will use config",
+        "--resume", action="store_true", help="denotes if to continue training, will use config",
     )
     opt = parser.parse_args()
     print(f"loading configuration from {opt.config}")
@@ -122,15 +115,9 @@ if __name__ == "__main__":
         CONFIG.dropout,
     )
     criterion = DPCLoss()
-    optimizer = optim.Adam(
-        model.parameters(), lr=CONFIG.lr, weight_decay=CONFIG.weight_decay
-    )
+    optimizer = optim.Adam(model.parameters(), lr=CONFIG.lr, weight_decay=CONFIG.weight_decay)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer,
-        mode="max",
-        factor=CONFIG.dampening_rate,
-        patience=CONFIG.patience,
-        verbose=True,
+        optimizer, mode="max", factor=CONFIG.dampening_rate, patience=CONFIG.patience, verbose=True,
     )
 
     """  Load from Checkpoint  """
@@ -206,13 +193,6 @@ if __name__ == "__main__":
             wandb.log({"learning_rate": optimizer.param_groups[0]["lr"]})
         scheduler.step(val_acc)
         saver.save_ckpt_if_best(
-            model,
-            optimizer,
-            scheduler,
-            val_acc,
-            delete_prev=CONFIG.only_best_checkpoint,
+            model, optimizer, scheduler, val_acc, delete_prev=CONFIG.only_best_checkpoint,
         )
-        print(
-            f"global time {global_timer} | val accuracy: {val_acc:.5f}% | "
-            f"end epoch {ep}"
-        )
+        print(f"global time {global_timer} | val accuracy: {val_acc:.5f}% | " f"end epoch {ep}")
