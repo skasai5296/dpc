@@ -94,9 +94,7 @@ class ConvGRU(nn.Module):
             cell_hidden = h[idx]
             output_inner = []
             for t in range(T):
-                cell_hidden = self.cell_list[idx](
-                    current_layer_input[:, t, ...], cell_hidden
-                )
+                cell_hidden = self.cell_list[idx](current_layer_input[:, t, ...], cell_hidden)
                 cell_hidden = self.dropout(cell_hidden)
                 output_inner.append(cell_hidden)
 
@@ -109,14 +107,7 @@ class ConvGRU(nn.Module):
 
 class DPC(nn.Module):
     def __init__(
-        self,
-        input_size,
-        hidden_size,
-        kernel_size,
-        num_layers,
-        n_clip,
-        pred_step,
-        dropout,
+        self, input_size, hidden_size, kernel_size, num_layers, n_clip, pred_step, dropout,
     ):
         super().__init__()
         self.n_clip = n_clip
@@ -130,9 +121,15 @@ class DPC(nn.Module):
         )
         self.relu = nn.ReLU(inplace=False)
 
+    def forward(self, x, flag="full"):
+        if flag == "full":
+            return self._full_pass(x)
+        elif flag == "extract":
+            return self._extract_features(x)
+
     # x: (B, num_clips, C, clip_len, H, W)
     # pred, out : (B, N, hidden_size, H, W)
-    def forward(self, x):
+    def _full_pass(self, x):
         B, N, *sizes = x.size()
         x = x.view(B * N, *sizes)
         # out : (B * N, hidden_size, H', W')
@@ -157,7 +154,7 @@ class DPC(nn.Module):
 
     # x: (B, num_clips, C, clip_len, H, W)
     # hidden : (B, hidden_size, H, W)
-    def extract_feature(self, x):
+    def _extract_feature(self, x):
         B, N, *sizes = x.size()
         x = x.view(B * N, *sizes)
         # out : (B * N, hidden_size, H', W')
@@ -184,17 +181,12 @@ class DPCClassification(nn.Module):
         num_classes,
     ):
         super().__init__()
-        self.dpc = DPC(
-            input_size, hidden_size, kernel_size, num_layers, n_clip, pred_step, dropout
-        )
+        self.dpc = DPC(input_size, hidden_size, kernel_size, num_layers, n_clip, pred_step, dropout)
         self.classification = nn.Linear(hidden_size, num_classes)
 
     # x : (B, num_clips, C, clip_len, H, W)
     # out : (B, num_classes)
-    def forward(self, x):
-        if hasattr(self.dpc, "module"):
-            out = self.dpc.module.extract_feature(x)
-        else:
-            out = self.dpc.extract_feature(x)
+    def forward(self, x, flag="extract"):
+        out = self.dpc(x, flag)
         out = self.classification(out.mean(-1).mean(-1))
         return out
