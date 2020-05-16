@@ -26,26 +26,22 @@ class ModelSaver:
             if start_epoch is None:
                 path = sorted(glob.glob(os.path.join(self.savedir, "*.ckpt")))[-1]
             else:
-                path = glob.glob(
-                    os.path.join(self.savedir, f"ep{start_epoch:03d}.ckpt")
-                )
+                path = glob.glob(os.path.join(self.savedir, f"ep{start_epoch:03d}.ckpt"))
         except IndexError:
             print("no checkpoint, not loading")
             return
         if os.path.exists(path):
             print(f"loading model from {path}")
             ckpt = torch.load(path, map_location="cpu")
-            model.load_state_dict(ckpt["model"], strict=False)
+            # make strict=false for some models
+            model.load_state_dict(ckpt["model"], strict=True)
             if optimizer is not None and "optimizer" in ckpt.items():
                 optimizer.load_state_dict(ckpt["optimizer"])
             if scheduler is not None and "scheduler" in ckpt.items():
                 scheduler.load_state_dict(ckpt["scheduler"])
             self.best = ckpt["bestscore"]
             self.epoch = ckpt["epoch"] + 1
-            print(
-                f"best score is set to {self.best}, restarting from epoch "
-                + f"{self.epoch}"
-            )
+            print(f"best score is set to {self.best}, restarting from epoch " + f"{self.epoch}")
         else:
             print(f"{path} does not exist, not loading")
 
@@ -162,13 +158,9 @@ class NPairLoss(nn.Module):
         # mask for diagonals
         mask = (torch.eye(n_samples) > 0.5).to(sim_mat.device)
         # caption negatives
-        lossmat_i = (
-            (self.margin + sim_mat - positive1).clamp(min=0).masked_fill(mask, 0)
-        )
+        lossmat_i = (self.margin + sim_mat - positive1).clamp(min=0).masked_fill(mask, 0)
         # image negatives
-        lossmat_c = (
-            (self.margin + sim_mat - positive2).clamp(min=0).masked_fill(mask, 0)
-        )
+        lossmat_c = (self.margin + sim_mat - positive2).clamp(min=0).masked_fill(mask, 0)
         # max of hinges loss
         if self.method == "max":
             # lossmat : (n_samples)

@@ -62,3 +62,31 @@ class DPCClassificationLoss(nn.Module):
             top1 = pred.argmax(1)
             acc = torch.eq(top1, gt).sum().item() / top1.size(0) * 100
         return loss, {"XELoss": loss.item(), "Accuracy (%)": acc}
+
+
+class BERTCPCLoss(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.criterion = nn.CrossEntropyLoss()
+
+    def forward(self, in_seq, out_seq, mask_idx):
+        """
+        Compute loss (dot product over feature dimension)
+        Args:
+            in_seq, out_seq: torch.Tensor (B, S, D)
+            mask_idx: torch.Tensor (B, S), torch.bool
+        Returns:
+            loss: torch.Tensor, sum of all losses
+            losses: loss dict
+        """
+        B, S = mask_idx.size()
+        for input, output, mask in zip(in_seq, out_seq, mask_idx):
+            print(input)
+            print(output)
+            print(mask)
+            sys.exit(0)
+
+        in_masked = in_seq * mask_idx
+        out_masked = out_seq * mask_idx
+        loss = self.criterion(in_masked, out_masked)
+        return loss, {"XELoss": loss.item(), "Accuracy (%)": acc}

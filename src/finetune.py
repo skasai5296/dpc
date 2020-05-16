@@ -122,7 +122,7 @@ if __name__ == "__main__":
 
     """  Load Pretrained Weights  """
     saver = ModelSaver(os.path.join(CONFIG.outpath, CONFIG.config_name))
-    saver.load_ckpt(model, optimizer=None, scheduler=None, start_epoch=CONFIG.finetune_from)
+    saver.load_ckpt(model.dpc, optimizer=None, scheduler=None, start_epoch=CONFIG.finetune_from)
 
     """  Model Components  """
     criterion = DPCClassificationLoss()

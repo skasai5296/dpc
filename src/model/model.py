@@ -6,8 +6,9 @@ import time
 
 import numpy as np
 import torch
-import torch.nn as nn
 import torchvision
+from torch import nn
+from torch.nn import functional as F
 from torch.nn.utils.rnn import (pack_padded_sequence, pad_packed_sequence,
                                 pad_sequence)
 from torchvision.models.video import r3d_18
@@ -190,3 +191,68 @@ class DPCClassification(nn.Module):
         out = self.dpc(x, flag)
         out = self.classification(out.mean(-1).mean(-1))
         return out
+
+
+class PositionalEncoding(nn.Module):
+    def __init__(self, d_model, dropout=0.1, max_len=5000):
+        super(PositionalEncoding, self).__init__()
+        self.dropout = nn.Dropout(p=dropout)
+
+        pe = torch.zeros(max_len, d_model)
+        position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
+        div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-np.log(10000.0) / d_model))
+        pe[:, 0::2] = torch.sin(position * div_term)
+        pe[:, 1::2] = torch.cos(position * div_term)
+        pe = pe.unsqueeze(0).transpose(0, 1)
+        self.register_buffer("pe", pe)
+
+    def forward(self, x):
+        x = x + self.pe[: x.size(0), :]
+        return self.dropout(x)
+
+
+class BERTCPC(nn.Module):
+    def __init__(self, input_size, hidden_size, num_layers, num_heads, n_clip, mask_p=0.15):
+        super().__init__()
+        self.mask_p = mask_p
+        self.hidden_size = hidden_size
+        self.cnn = ClipEncoder()
+        self.fc = nn.Linear(512, hidden_size)
+        self.pe = PositionalEncoding(hidden_size, max_len=n_clip)
+        encoder_layer = nn.TransformerEncoderLayer(d_model=hidden_size, nhead=num_heads)
+        self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
+
+    # x: (B, num_clips, C, clip_len, H, W)
+    # pred, out : (B, N, hidden_size)
+    def forward(self, x):
+        B, N, *sizes = x.size()
+        x = x.view(B * N, *sizes)
+        # out : (B * N, 512, H', W')
+        out = self.cnn(x)
+        BxN, D, *_ = out.size()
+        # out : (BxN, 512)
+        out = F.adaptive_avg_pool2d(out, 1).view(BxN, D)
+        # out : (B, N, hidden_size)
+        out = self.fc(out).view(B, N, self.hidden_size)
+
+        # zero tokens by mask_prob
+        probs = torch.full((B, N), 1.0 - self.mask_p)
+        mask = torch.bernoulli(probs)
+        mask = mask.view(B, N, 1)
+        masked_out = out * mask
+
+        # trans_out : (B, N, hidden_size)
+        trans_out = self.transformer_encoder(self.pe(masked_out.permute(1, 0, 2))).permute(1, 0, 2)
+        return out, trans_out, mask
+
+
+if __name__ == "__main__":
+    # B N C T H W
+    a = torch.randn(2, 8, 3, 5, 112, 112)
+    model = BERTCPC(512, 128, 1, 8, 8, 0.3)
+    out, trans_out, mask = model(a)
+    # B N C'
+    print(out.size())
+    print(trans_out.size())
+    print(mask.size())
+    print(mask)
