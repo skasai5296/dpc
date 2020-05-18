@@ -10,8 +10,8 @@ from torch import nn, optim
 from torch.utils.data import DataLoader
 
 from dataset.kinetics import Kinetics700, collate_fn, get_transforms
-from model.criterion import DPCLoss
-from model.model import DPC
+from model.criterion import DPCLoss, BERTCPCLoss
+from model.model import DPC, BERTCPC
 from util import spatial_transforms, temporal_transforms
 from util.utils import AverageMeter, ModelSaver, Timer
 
@@ -25,8 +25,8 @@ def train_epoch(loader, model, optimizer, criterion, device, CONFIG, epoch):
         clip = data["clip"].to(device)
 
         optimizer.zero_grad()
-        pred, gt = model(clip)
-        loss, losses = criterion(pred, gt)
+        output = model(clip)
+        loss, losses = criterion(*output)
 
         train_loss.update(losses["XELoss"])
         train_acc.update(losses["Accuracy (%)"])
@@ -46,7 +46,6 @@ def train_epoch(loader, model, optimizer, criterion, device, CONFIG, epoch):
             )
             train_loss.reset()
             train_acc.reset()
-            break
 
 
 def validate(loader, model, criterion, device, CONFIG, epoch):
@@ -105,16 +104,26 @@ if __name__ == "__main__":
         wandb.init(name=CONFIG.config_name, config=CONFIG, project=CONFIG.project_name)
 
     """  Model Components  """
-    model = DPC(
-        CONFIG.input_size,
-        CONFIG.hidden_size,
-        CONFIG.kernel_size,
-        CONFIG.num_layers,
-        CONFIG.n_clip,
-        CONFIG.pred_step,
-        CONFIG.dropout,
-    )
-    criterion = DPCLoss()
+    if CONFIG.bert:
+        model = BERTCPC(
+            CONFIG.input_size,
+            CONFIG.hidden_size,
+            CONFIG.num_layers,
+            CONFIG.num_heads,
+            CONFIG.n_clip,
+        )
+        criterion = BERTCPCLoss()
+    else:
+        model = DPC(
+            CONFIG.input_size,
+            CONFIG.hidden_size,
+            CONFIG.kernel_size,
+            CONFIG.num_layers,
+            CONFIG.n_clip,
+            CONFIG.pred_step,
+            CONFIG.dropout,
+        )
+        criterion = DPCLoss()
     optimizer = optim.Adam(model.parameters(), lr=CONFIG.lr, weight_decay=CONFIG.weight_decay)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(
         optimizer, mode="max", factor=CONFIG.dampening_rate, patience=CONFIG.patience, verbose=True,

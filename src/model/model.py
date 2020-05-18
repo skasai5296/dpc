@@ -51,7 +51,7 @@ class ConvGRUCell(nn.Module):
     def forward(self, x, h):
         if h is None:
             B, C, *spatial_dim = x.size()
-            h = torch.zeros([B, self.hidden_size, *spatial_dim]).to(x.device)
+            h = torch.zeros([B, self.hidden_size, *spatial_dim], device=x.device)
         input = torch.cat([x, h], dim=1)
         update = torch.sigmoid(self.update_gate(input))
         reset = torch.sigmoid(self.reset_gate(input))
@@ -221,9 +221,12 @@ class BERTCPC(nn.Module):
         self.pe = PositionalEncoding(hidden_size, max_len=n_clip)
         encoder_layer = nn.TransformerEncoderLayer(d_model=hidden_size, nhead=num_heads)
         self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
+        # number of tokens to mask
+        self.dropnum = int(n_clip * mask_p)
 
     # x: (B, num_clips, C, clip_len, H, W)
     # pred, out : (B, N, hidden_size)
+    # drop_indices : (B, self.dropnum)
     def forward(self, x):
         B, N, *sizes = x.size()
         x = x.view(B * N, *sizes)
@@ -235,15 +238,19 @@ class BERTCPC(nn.Module):
         # out : (B, N, hidden_size)
         out = self.fc(out).view(B, N, self.hidden_size)
 
-        # zero tokens by mask_prob
-        probs = torch.full((B, N), 1.0 - self.mask_p)
-        mask = torch.bernoulli(probs)
-        mask = mask.view(B, N, 1)
-        masked_out = out * mask
+        # masked_out : (B, N, hidden_size)
+        masked_out = torch.empty_like(out)
+        # masked_out : (B, self.dropnum)
+        drop_indices = torch.empty(B, self.dropnum, dtype=torch.long, device=out.device)
+        for i, seq in enumerate(out):
+            drop = torch.randperm(N, device=out.device)[:self.dropnum]
+            drop_indices[i] = drop
+            # seq: (N, hidden_size)
+            masked_out[i] = seq.index_fill(0, drop, 0)
 
         # trans_out : (B, N, hidden_size)
         trans_out = self.transformer_encoder(self.pe(masked_out.permute(1, 0, 2))).permute(1, 0, 2)
-        return out, trans_out, mask
+        return out, trans_out, drop_indices
 
 
 if __name__ == "__main__":
