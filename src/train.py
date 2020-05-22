@@ -34,10 +34,9 @@ def train_epoch(loader, model, optimizer, criterion, device, CONFIG, epoch):
         if CONFIG.grad_clip > 0:
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=CONFIG.grad_clip)
         optimizer.step()
-
-        if CONFIG.use_wandb:
-            wandb.log({train_loss.name: train_loss.val, train_acc.name: train_acc.val})
         if it % 10 == 9:
+            if CONFIG.use_wandb:
+                wandb.log({train_loss.name: train_loss.avg, train_acc.name: train_acc.avg})
             print(
                 f"epoch {epoch:03d}/{CONFIG.max_epoch:03d} | train | "
                 f"{train_timer} | iter {it+1:06d}/{len(loader):06d} | "
@@ -59,8 +58,8 @@ def validate(loader, model, criterion, device, CONFIG, epoch):
         clip = data["clip"].to(device)
 
         with torch.no_grad():
-            pred, gt = model(clip)
-            loss, losses = criterion(pred, gt)
+            output = model(clip)
+            loss, losses = criterion(*output)
 
         val_loss.update(losses["XELoss"])
         val_acc.update(losses["Accuracy (%)"])
@@ -145,10 +144,10 @@ if __name__ == "__main__":
         print("using CPU")
     model = model.to(device)
     # for sending pretrained weights to GPU for optimizer
-    for state in optimizer.state.values():
-        for k, v in state.items():
-            if isinstance(v, torch.Tensor):
-                state[k] = v.to(device)
+    #for state in optimizer.state.values():
+    #    for k, v in state.items():
+    #        if isinstance(v, torch.Tensor):
+    #            state[k] = v.to(device)
     if torch.cuda.device_count() > 1:
         model = nn.DataParallel(model)
 
