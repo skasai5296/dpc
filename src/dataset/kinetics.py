@@ -187,18 +187,14 @@ def get_transforms(mode, CONFIG, finetune=False):
         tp_t = temporal_transforms.Compose(
             [
                 temporal_transforms.TemporalSubsampling(CONFIG.downsample),
-                temporal_transforms.SlidingWindow(
-                    size=CONFIG.clip_len * CONFIG.n_clip, stride=6
-                ),
+                temporal_transforms.SlidingWindow(size=CONFIG.clip_len * CONFIG.n_clip, stride=6),
             ]
         )
     else:
         tp_t = temporal_transforms.Compose(
             [
                 temporal_transforms.TemporalSubsampling(CONFIG.downsample),
-                temporal_transforms.TemporalRandomCrop(
-                    size=CONFIG.clip_len * CONFIG.n_clip
-                ),
+                temporal_transforms.TemporalRandomCrop(size=CONFIG.clip_len * CONFIG.n_clip),
             ]
         )
     return sp_t, tp_t
