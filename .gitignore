@@ -3,7 +3,7 @@ out
 src/cfg/*
 !src/cfg/default.yml
 wandb
-nohup.out
+*.out
 
 # for mac
 .DS_Store
