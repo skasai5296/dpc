@@ -1,6 +1,6 @@
 use_wandb: false
 project_name: DPC
-config_name: debug
+config_name: default
 
 data_path: /home/seito/ssd2/kinetics/
 video_path: videos_700_hdf5
@@ -8,6 +8,8 @@ ann_path: kinetics-700-hdf5.json
 only_best_checkpoint: false
 clip_len: 5
 n_clip: 8
+bert: false
+num_heads: 8
 downsample: 3
 pred_step: 3
 input_size: 512
@@ -17,9 +19,9 @@ num_layers: 1
 resize: 112
 batch_size: 32
 max_epoch: 20
-num_workers: 0
+num_workers: 2
 outpath: out
-gpu_ids: [0, 1]
+gpu_ids: [0]
 dropout: 0.1
 lr: 0.001
 weight_decay: 0.00001
@@ -35,3 +37,5 @@ finetune_lr: 0.001
 finetune_weight_decay: 0.00001
 finetune_dropout: 0.1
 finetune_grad_clip: 0.
+finetune_dampening_rate: 0.1
+finetune_patience: 5
