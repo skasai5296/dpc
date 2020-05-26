@@ -2,6 +2,7 @@ import argparse
 import os
 from pprint import pprint
 
+import numpy as np
 import torch
 import wandb
 import yaml
@@ -18,8 +19,8 @@ from util.utils import AverageMeter, ModelSaver, Timer
 
 def train_epoch(loader, model, optimizer, criterion, device, CONFIG, epoch):
     train_timer = Timer()
-    model.train()
     metrics = [AverageMeter("XELoss"), AverageMeter("MSELoss"), AverageMeter("Accuracy (%)")]
+    model.train()
     for it, data in enumerate(loader):
         clip = data["clip"].to(device)
 
@@ -98,6 +99,17 @@ if __name__ == "__main__":
     CONFIG = Dict(yaml.safe_load(open(opt.config)))
     print("CONFIGURATIONS:")
     pprint(CONFIG)
+
+    """  Set Random Seeds  """
+    if CONFIG.seed >= 0:
+        np.random.seed(CONFIG.seed)
+        torch.manual_seed(CONFIG.seed)
+        # torch.manual_seed_all(CONFIG.seed)
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
+    else:
+        torch.backends.cudnn.deterministic = False
+        torch.backends.cudnn.benchmark = True
 
     if CONFIG.use_wandb:
         wandb.init(name=CONFIG.config_name, config=CONFIG, project=CONFIG.project_name)

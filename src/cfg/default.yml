@@ -29,6 +29,8 @@ grad_clip: 0.
 dampening_rate: 0.1
 patience: 5
 
+seed: -1
+
 # from which epoch to start finetuning, set to None for newest
 finetune_gpu_ids: [0, 1]
 finetune_from:
