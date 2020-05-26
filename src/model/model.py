@@ -221,13 +221,20 @@ class BERTCPC(nn.Module):
         self.pe = PositionalEncoding(hidden_size, max_len=n_clip)
         encoder_layer = nn.TransformerEncoderLayer(d_model=hidden_size, nhead=num_heads)
         self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
+        self.predictor = nn.TransformerEncoder(encoder_layer, num_layers=1)
         # number of tokens to mask
         self.dropnum = int(n_clip * mask_p)
+
+    def forward(self, x, flag="full"):
+        if flag == "full":
+            return self._full_pass(x)
+        elif flag == "extract":
+            return self._extract_feature(x)
 
     # x: (B, num_clips, C, clip_len, H, W)
     # pred, out : (B, N, hidden_size)
     # drop_indices : (B, self.dropnum)
-    def forward(self, x):
+    def _full_pass(self, x):
         B, N, *sizes = x.size()
         x = x.view(B * N, *sizes)
         # out : (B * N, 512, H', W')
@@ -243,14 +250,58 @@ class BERTCPC(nn.Module):
         # masked_out : (B, self.dropnum)
         drop_indices = torch.empty(B, self.dropnum, dtype=torch.long, device=out.device)
         for i, seq in enumerate(out):
-            drop = torch.randperm(N, device=out.device)[:self.dropnum]
+            drop = torch.randperm(N, device=out.device)[: self.dropnum]
             drop_indices[i] = drop
             # seq: (N, hidden_size)
             masked_out[i] = seq.index_fill(0, drop, 0)
 
         # trans_out : (B, N, hidden_size)
         trans_out = self.transformer_encoder(self.pe(masked_out.permute(1, 0, 2))).permute(1, 0, 2)
-        return out, trans_out, drop_indices
+        pred = self.predictor(self.pe(trans_out.permute(1, 0, 2))).permute(1, 0, 2)
+        return out, pred, drop_indices
+
+    # x: (B, num_clips, C, clip_len, H, W)
+    def _extract_feature(self, x):
+        B, N, *sizes = x.size()
+        x = x.view(B * N, *sizes)
+        # out : (B * N, hidden_size, H', W')
+        out = self.cnn(x)
+        BxN, D, *_ = out.size()
+        # out : (BxN, 512)
+        out = F.adaptive_avg_pool2d(out, 1).view(BxN, D)
+        # out : (B, N, hidden_size)
+        out = self.fc(out).view(B, N, self.hidden_size)
+
+        # trans_out : (B, N, hidden_size)
+        trans_out = self.transformer_encoder(self.pe(out.permute(1, 0, 2))).permute(1, 0, 2)
+        return trans_out
+
+
+class BERTCPCClassification(nn.Module):
+    def __init__(
+        self, input_size, hidden_size, num_layers, num_heads, n_clip, mask_p, num_classes,
+    ):
+        super().__init__()
+        self.dpc = BERTCPC(input_size, hidden_size, num_layers, num_heads, n_clip, mask_p)
+        self.classification = nn.Linear(hidden_size, num_classes)
+
+    # x : (B, num_clips, C, clip_len, H, W)
+    # out : (B, num_classes)
+    def forward(self, x, flag="extract"):
+        out = self.dpc(x, flag)
+        # average over temporal dimension
+        out = self.classification(out.mean(1))
+        return out
+
+
+class SpatialPositionalEncoding(nn.Module):
+    def __init__(
+        self, d_model,
+    ):
+        pass
+
+    def forward(self, x):
+        pass
 
 
 if __name__ == "__main__":
