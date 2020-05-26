@@ -8,7 +8,8 @@ ann_path: kinetics-700-hdf5.json
 only_best_checkpoint: false
 clip_len: 5
 n_clip: 8
-bert: false
+# DPC, CPC, FGCPC
+model: DPC
 num_heads: 8
 downsample: 3
 pred_step: 3

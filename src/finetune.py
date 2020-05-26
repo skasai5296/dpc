@@ -6,15 +6,16 @@ from pprint import pprint
 
 import numpy as np
 import torch
-import wandb
 import yaml
 from addict import Dict
 from torch import nn, optim
 from torch.utils.data import DataLoader
 
+import wandb
 from dataset.kinetics import Kinetics700, collate_fn, get_transforms
 from model.criterion import ClassificationLoss
-from model.model import BERTCPCClassification, DPCClassification
+from model.model import (BERTCPCClassification, DPCClassification,
+                         FineGrainedCPCClassification)
 from util import spatial_transforms, temporal_transforms
 from util.utils import AverageMeter, ModelSaver, Timer
 
@@ -61,15 +62,13 @@ def validate(loader, model, criterion, device, CONFIG, epoch):
     global_metrics = [AverageMeter("XELoss"), AverageMeter("Accuracy (%)")]
     model.eval()
     for it, data in enumerate(loader):
-        # batch size 1
         clip = data["clip"].to(device)
         label = data["label"].to(device)
         if it == 1:
             subprocess.run(["nvidia-smi"])
 
         with torch.no_grad():
-            # batch size 1
-            out = model(clip).mean(0).unsqueeze(0)
+            out = model(clip)
             loss, lossdict = criterion(out, label)
 
         for metric in metrics:
@@ -129,7 +128,7 @@ if __name__ == "__main__":
         )
 
     """  Model Components  """
-    if CONFIG.bert:
+    if CONFIG.model == "CPC":
         model = BERTCPCClassification(
             CONFIG.input_size,
             CONFIG.hidden_size,
@@ -138,7 +137,7 @@ if __name__ == "__main__":
             CONFIG.n_clip,
             700,
         )
-    else:
+    elif CONFIG.model == "DPC":
         model = DPCClassification(
             CONFIG.input_size,
             CONFIG.hidden_size,
@@ -148,6 +147,17 @@ if __name__ == "__main__":
             CONFIG.pred_step,
             CONFIG.finetune_dropout,
             700,
+        )
+    elif CONFIG.model == "FGCPC":
+        model = FineGrainedCPCClassification(
+            CONFIG.input_size,
+            CONFIG.hidden_size,
+            7,
+            CONFIG.num_layers,
+            CONFIG.num_heads,
+            CONFIG.n_clip,
+            700,
+            CONFIG.finetune_dropout,
         )
 
     """  Load Pretrained Weights  """

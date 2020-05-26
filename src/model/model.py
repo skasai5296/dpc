@@ -357,7 +357,7 @@ class FineGrainedCPC(nn.Module):
             return self._extract_feature(x)
 
     # x: (B, num_clips, C, clip_len, H, W)
-    # pred, out : (B, N, S, S, hidden_size)
+    # pred, out : (B, N * S * S, hidden_size)
     # drop_indices, keep_indices : (B, self.dropnum)
     def _full_pass(self, x):
         B, N, *sizes = x.size()

@@ -14,7 +14,7 @@ from torch.utils.data import DataLoader
 import wandb
 from dataset.kinetics import Kinetics700, collate_fn, get_transforms
 from model.criterion import BERTCPCLoss, DPCLoss
-from model.model import BERTCPC, DPC
+from model.model import BERTCPC, DPC, FineGrainedCPC
 from util import spatial_transforms, temporal_transforms
 from util.utils import AverageMeter, ModelSaver, Timer
 
@@ -127,7 +127,7 @@ if __name__ == "__main__":
         wandb.init(name=CONFIG.config_name, config=CONFIG, project=CONFIG.project_name)
 
     """  Model Components  """
-    if CONFIG.bert:
+    if CONFIG.model == "CPC":
         model = BERTCPC(
             CONFIG.input_size,
             CONFIG.hidden_size,
@@ -136,7 +136,7 @@ if __name__ == "__main__":
             CONFIG.n_clip,
         )
         criterion = BERTCPCLoss()
-    else:
+    elif CONFIG.model == "DPC":
         model = DPC(
             CONFIG.input_size,
             CONFIG.hidden_size,
@@ -147,6 +147,17 @@ if __name__ == "__main__":
             CONFIG.dropout,
         )
         criterion = DPCLoss()
+    elif CONFIG.model == "FGCPC":
+        model = FineGrainedCPC(
+            CONFIG.input_size,
+            CONFIG.hidden_size,
+            7,
+            CONFIG.num_layers,
+            CONFIG.num_heads,
+            CONFIG.n_clip,
+            CONFIG.dropout,
+        )
+        criterion = BERTCPCLoss()
     optimizer = optim.Adam(model.parameters(), lr=CONFIG.lr, weight_decay=CONFIG.weight_decay)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(
         optimizer, mode="max", factor=CONFIG.dampening_rate, patience=CONFIG.patience, verbose=True,
