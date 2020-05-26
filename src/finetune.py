@@ -1,5 +1,6 @@
 import argparse
 import os
+import random
 from pprint import pprint
 
 import numpy as np
@@ -58,7 +59,7 @@ def validate(loader, model, criterion, device, CONFIG, epoch):
     model.eval()
     for it, data in enumerate(loader):
         # batch size 1
-        clip = data["clip"][0, : CONFIG.finetune_batch_size].to(device)
+        clip = data["clip"].to(device)
         label = data["label"].to(device)
 
         with torch.no_grad():
@@ -86,7 +87,7 @@ def validate(loader, model, criterion, device, CONFIG, epoch):
     if CONFIG.use_wandb:
         for metric in global_metrics:
             wandb.log({f"finetune epoch {metric.name}": metric.avg})
-    return global_metrics[2].avg
+    return global_metrics[-1].avg
 
 
 if __name__ == "__main__":
@@ -107,6 +108,7 @@ if __name__ == "__main__":
 
     """  Set Random Seeds  """
     if CONFIG.seed >= 0:
+        random.seed(CONFIG.seed)
         np.random.seed(CONFIG.seed)
         torch.manual_seed(CONFIG.seed)
         # torch.manual_seed_all(CONFIG.seed)

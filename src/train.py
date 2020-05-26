@@ -1,5 +1,6 @@
 import argparse
 import os
+import random
 from pprint import pprint
 
 import numpy as np
@@ -20,6 +21,8 @@ from util.utils import AverageMeter, ModelSaver, Timer
 def train_epoch(loader, model, optimizer, criterion, device, CONFIG, epoch):
     train_timer = Timer()
     metrics = [AverageMeter("XELoss"), AverageMeter("MSELoss"), AverageMeter("Accuracy (%)")]
+    if not CONFIG.bert:
+        metrics.pop(1)
     model.train()
     for it, data in enumerate(loader):
         clip = data["clip"].to(device)
@@ -53,6 +56,9 @@ def validate(loader, model, criterion, device, CONFIG, epoch):
     val_timer = Timer()
     metrics = [AverageMeter("XELoss"), AverageMeter("MSELoss"), AverageMeter("Accuracy (%)")]
     global_metrics = [AverageMeter("XELoss"), AverageMeter("MSELoss"), AverageMeter("Accuracy (%)")]
+    if not CONFIG.bert:
+        metrics.pop(1)
+        global_metrics.pop(1)
     model.eval()
     for it, data in enumerate(loader):
         clip = data["clip"].to(device)
@@ -81,7 +87,7 @@ def validate(loader, model, criterion, device, CONFIG, epoch):
     if CONFIG.use_wandb:
         for metric in global_metrics:
             wandb.log({f"epoch {metric.name}": metric.avg})
-    return global_metrics[2].avg
+    return global_metrics[-1].avg
 
 
 if __name__ == "__main__":
@@ -102,6 +108,7 @@ if __name__ == "__main__":
 
     """  Set Random Seeds  """
     if CONFIG.seed >= 0:
+        random.seed(CONFIG.seed)
         np.random.seed(CONFIG.seed)
         torch.manual_seed(CONFIG.seed)
         # torch.manual_seed_all(CONFIG.seed)
