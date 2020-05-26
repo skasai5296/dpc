@@ -3,12 +3,12 @@ import os
 from pprint import pprint
 
 import torch
+import wandb
 import yaml
 from addict import Dict
 from torch import nn, optim
 from torch.utils.data import DataLoader
 
-import wandb
 from dataset.kinetics import Kinetics700, collate_fn, get_transforms
 from model.criterion import BERTCPCLoss, DPCLoss
 from model.model import BERTCPC, DPC
@@ -144,10 +144,10 @@ if __name__ == "__main__":
         print("using CPU")
     model = model.to(device)
     # for sending pretrained weights to GPU for optimizer
-    # for state in optimizer.state.values():
-    #    for k, v in state.items():
-    #        if isinstance(v, torch.Tensor):
-    #            state[k] = v.to(device)
+    for state in optimizer.state.values():
+        for k, v in state.items():
+            if isinstance(v, torch.Tensor):
+                state[k] = v.to(device)
     if torch.cuda.device_count() > 1:
         model = nn.DataParallel(model)
 

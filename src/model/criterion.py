@@ -40,7 +40,7 @@ class DPCLoss(nn.Module):
         return loss, {"XELoss": loss.item(), "Accuracy (%)": acc}
 
 
-class DPCClassificationLoss(nn.Module):
+class ClassificationLoss(nn.Module):
     def __init__(self):
         super().__init__()
         self.criterion = nn.CrossEntropyLoss()

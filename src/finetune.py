@@ -10,51 +10,50 @@ from torch import nn, optim
 from torch.utils.data import DataLoader
 
 from dataset.kinetics import Kinetics700, collate_fn, get_transforms
-from model.criterion import DPCClassificationLoss
-from model.model import DPCClassification
+from model.criterion import ClassificationLoss
+from model.model import BERTCPCClassification, DPCClassification
 from util import spatial_transforms, temporal_transforms
 from util.utils import AverageMeter, ModelSaver, Timer
 
 
 def train_epoch(loader, model, optimizer, criterion, device, CONFIG, epoch):
     train_timer = Timer()
+    metrics = [AverageMeter("XELoss"), AverageMeter("Accuracy (%)")]
     model.train()
-    train_loss = AverageMeter("train XEloss")
-    train_acc = AverageMeter("train Accuracy")
     for it, data in enumerate(loader):
         clip = data["clip"].to(device)
         label = data["label"].to(device)
 
         optimizer.zero_grad()
         out = model(clip)
-        loss, losses = criterion(out, label)
+        loss, lossdict = criterion(out, label)
 
-        train_loss.update(losses["XELoss"])
-        train_acc.update(losses["Accuracy (%)"])
+        for metric in metrics:
+            metric.update(lossdict[metric.name])
         loss.backward()
         if CONFIG.finetune_grad_clip > 0:
-            torch.nn.utils.clip_grad_norm_(m.parameters(), max_norm=CONFIG.finetune_grad_clip)
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=CONFIG.finetune_grad_clip)
         optimizer.step()
 
-        if CONFIG.use_wandb:
-            wandb.log({train_loss.name: train_loss.val, train_acc.name: train_acc.val})
         if it % 100 == 99:
+            metricstr = " | ".join([f"train {metric}" for metric in metrics])
             print(
                 f"epoch {epoch:03d}/{CONFIG.max_epoch:03d} | train | "
                 f"{train_timer} | iter {it+1:06d}/{len(loader):06d} | "
-                f"{train_loss} | {train_acc}",
+                f"{metricstr}",
                 flush=True,
             )
-            train_loss.reset()
-            train_acc.reset()
+            if CONFIG.use_wandb:
+                for metric in metrics:
+                    wandb.log({f"finetune train {metric.name}": metric.avg})
+            for metric in metrics:
+                metric.reset()
 
 
 def validate(loader, model, criterion, device, CONFIG, epoch):
     val_timer = Timer()
-    val_loss = AverageMeter("val XEloss")
-    val_acc = AverageMeter("val Accuracy")
-    gl_val_loss = AverageMeter("epoch val XELoss")
-    gl_val_acc = AverageMeter("epoch val Accuracy")
+    metrics = [AverageMeter("XELoss"), AverageMeter("Accuracy (%)")]
+    global_metrics = [AverageMeter("XELoss"), AverageMeter("Accuracy (%)")]
     model.eval()
     for it, data in enumerate(loader):
         # batch size 1
@@ -64,27 +63,29 @@ def validate(loader, model, criterion, device, CONFIG, epoch):
         with torch.no_grad():
             # batch size 1
             out = model(clip).mean(0).unsqueeze(0)
-            loss, losses = criterion(out, label)
+            loss, lossdict = criterion(out, label)
 
-        val_loss.update(losses["XELoss"])
-        val_acc.update(losses["Accuracy (%)"])
-        gl_val_loss.update(losses["XELoss"])
-        gl_val_acc.update(losses["Accuracy (%)"])
+        for metric in metrics:
+            metric.update(lossdict[metric.name])
+        for metric in global_metrics:
+            metric.update(lossdict[metric.name])
         if it % 100 == 99:
+            metricstr = " | ".join([f"validation {metric}" for metric in metrics])
             print(
                 f"epoch {epoch:03d}/{CONFIG.max_epoch:03d} | valid | "
                 f"{val_timer} | iter {it+1:06d}/{len(loader):06d} | "
-                f"{val_loss} | {val_acc}",
+                f"{metricstr}",
                 flush=True,
             )
-            val_loss.reset()
-            val_acc.reset()
+            for metric in metrics:
+                metric.reset()
         # validating for 100 samples is enough
         if it == 1000:
             break
     if CONFIG.use_wandb:
-        wandb.log({gl_val_loss.name: gl_val_loss.avg, gl_val_acc.name: gl_val_acc.avg})
-    return gl_val_acc.avg
+        for metric in global_metrics:
+            wandb.log({f"finetune epoch {metric.name}": metric.avg})
+    return global_metrics[2].avg
 
 
 if __name__ == "__main__":
@@ -109,23 +110,33 @@ if __name__ == "__main__":
         )
 
     """  Model Components  """
-    model = DPCClassification(
-        CONFIG.input_size,
-        CONFIG.hidden_size,
-        CONFIG.kernel_size,
-        CONFIG.num_layers,
-        CONFIG.n_clip,
-        CONFIG.pred_step,
-        CONFIG.finetune_dropout,
-        700,
-    )
+    if CONFIG.bert:
+        model = BERTCPCClassification(
+            CONFIG.input_size,
+            CONFIG.hidden_size,
+            CONFIG.num_layers,
+            CONFIG.num_heads,
+            CONFIG.n_clip,
+            700,
+        )
+    else:
+        model = DPCClassification(
+            CONFIG.input_size,
+            CONFIG.hidden_size,
+            CONFIG.kernel_size,
+            CONFIG.num_layers,
+            CONFIG.n_clip,
+            CONFIG.pred_step,
+            CONFIG.finetune_dropout,
+            700,
+        )
 
     """  Load Pretrained Weights  """
     saver = ModelSaver(os.path.join(CONFIG.outpath, CONFIG.config_name))
     saver.load_ckpt(model.dpc, optimizer=None, scheduler=None, start_epoch=CONFIG.finetune_from)
 
     """  Model Components  """
-    criterion = DPCClassificationLoss()
+    criterion = ClassificationLoss()
     optimizer = optim.Adam(
         model.parameters(), lr=CONFIG.finetune_lr, weight_decay=CONFIG.finetune_weight_decay,
     )
@@ -134,6 +145,7 @@ if __name__ == "__main__":
         mode="max",
         factor=CONFIG.finetune_dampening_rate,
         patience=CONFIG.finetune_patience,
+        verbose=True,
     )
 
     """  Load from Checkpoint  """
@@ -185,7 +197,6 @@ if __name__ == "__main__":
         spatial_transform=sp_t,
         temporal_transform=tp_t,
         mode="val",
-        return_clips=True,
     )
     train_dl = DataLoader(
         train_ds,
@@ -195,7 +206,11 @@ if __name__ == "__main__":
         collate_fn=collate_fn,
     )
     val_dl = DataLoader(
-        val_ds, batch_size=1, shuffle=True, num_workers=CONFIG.num_workers, collate_fn=collate_fn,
+        val_ds,
+        batch_size=CONFIG.finetune_batch_size,
+        shuffle=True,
+        num_workers=CONFIG.num_workers,
+        collate_fn=collate_fn,
     )
 
     """  Training Loop  """
@@ -204,6 +219,8 @@ if __name__ == "__main__":
         train_epoch(train_dl, model, optimizer, criterion, device, CONFIG, ep)
         print(f"global time {global_timer} | start validation epoch {ep}")
         val_acc = validate(val_dl, model, criterion, device, CONFIG, ep)
+        if CONFIG.use_wandb:
+            wandb.log({"learning_rate": optimizer.param_groups[0]["lr"]})
         scheduler.step(val_acc)
         saver.save_ckpt_if_best(
             model, optimizer, scheduler, val_acc, delete_prev=CONFIG.only_best_checkpoint,
