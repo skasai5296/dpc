@@ -67,39 +67,48 @@ class DPCClassificationLoss(nn.Module):
 class BERTCPCLoss(nn.Module):
     def __init__(self):
         super().__init__()
-        self.celoss = nn.CrossEntropyLoss()
+        self.xeloss = nn.CrossEntropyLoss()
         self.mseloss = nn.MSELoss()
 
-    def forward(self, in_seq, out_seq, mask_idx):
+    def forward(self, in_seq, out_seq, drop_idx, keep_idx):
         """
         Compute loss (dot product over feature dimension)
         Args:
             in_seq, out_seq: torch.Tensor (B, S, D)
             drop_idx: torch.Tensor (B, dropnum), torch.long
+            keep_idx: torch.Tensor (B, S-dropnum), torch.long
         Returns:
             loss: torch.Tensor, sum of all losses
             losses: loss dict
         """
         B, S, D = in_seq.size()
-        B, dropnum = mask_idx.size()
-        outputs = torch.empty(B, dropnum, D, device=in_seq.device)
+        B, dropnum = drop_idx.size()
+        predictions = torch.empty(B, dropnum, D, device=in_seq.device)
+        inputs = torch.empty(B, S - dropnum, D, device=in_seq.device)
+        reconstructions = torch.empty(B, S - dropnum, D, device=in_seq.device)
         # target: (B, dropnum)
         target = torch.empty(B, dropnum, dtype=torch.long, device=in_seq.device)
-        for i, (output, drop) in enumerate(zip(out_seq, mask_idx)):
-            # outputs: (S, D) -> (dropnum, D)
-            output = output.index_select(0, drop)
-            outputs[i] = output
-            target[i] = int(i*S) + drop
+        for i, (inp, out, drop, keep) in enumerate(zip(in_seq, out_seq, drop_idx, keep_idx)):
+            # pred: (dropnum, D)
+            pred = out.index_select(0, drop)
+            predictions[i] = pred
+            # orig, recon: (S-dropnum, D)
+            orig = inp.index_select(0, keep)
+            inputs[i] = orig
+            recon = out.index_select(0, keep)
+            reconstructions[i] = recon
+            target[i] = int(i * S) + drop
         # target: (B * dropnum)
         target = target.flatten()
-        outputs = outputs.reshape(B*dropnum, -1)
-        in_seq = in_seq.permute(2, 0, 1).reshape(-1, B*S)
+        outputs = predictions.reshape(B * dropnum, -1)
+        in_seq = in_seq.permute(2, 0, 1).reshape(-1, B * S)
         # lossmat: (B * dropnum, B * S)
         lossmat = torch.matmul(outputs, in_seq)
         with torch.no_grad():
             # top1: (B * dropnum)
             top1 = lossmat.argmax(1)
             acc = torch.eq(top1, target).sum().item() / top1.size(0) * 100
+        xe = self.xeloss(lossmat, target)
+        mse = self.mseloss(inputs, reconstructions)
 
-        loss = self.celoss(lossmat, target)
-        return loss, {"XELoss": loss.item(), "Accuracy (%)": acc}
+        return xe + mse, {"XELoss": xe.item(), "MSELoss": mse.item(), "Accuracy (%)": acc}

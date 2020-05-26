@@ -246,19 +246,23 @@ class BERTCPC(nn.Module):
         out = self.fc(out).view(B, N, self.hidden_size)
 
         # masked_out : (B, N, hidden_size)
-        masked_out = torch.empty_like(out)
+        masked_out = out.clone()
         # masked_out : (B, self.dropnum)
         drop_indices = torch.empty(B, self.dropnum, dtype=torch.long, device=out.device)
-        for i, seq in enumerate(out):
-            drop = torch.randperm(N, device=out.device)[: self.dropnum]
+        keep_indices = torch.empty(B, N - self.dropnum, dtype=torch.long, device=out.device)
+        for i, seq in enumerate(masked_out):
+            indices = torch.randperm(N, device=out.device)
+            drop = indices[: self.dropnum]
             drop_indices[i] = drop
+            keep = indices[self.dropnum :]
+            keep_indices[i] = keep
             # seq: (N, hidden_size)
-            masked_out[i] = seq.index_fill(0, drop, 0)
+            seq.index_fill_(0, drop, 0)
 
         # trans_out : (B, N, hidden_size)
         trans_out = self.transformer_encoder(self.pe(masked_out.permute(1, 0, 2))).permute(1, 0, 2)
         pred = self.predictor(self.pe(trans_out.permute(1, 0, 2))).permute(1, 0, 2)
-        return out, pred, drop_indices
+        return out, pred, drop_indices, keep_indices
 
     # x: (B, num_clips, C, clip_len, H, W)
     def _extract_feature(self, x):

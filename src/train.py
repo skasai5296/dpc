@@ -3,15 +3,15 @@ import os
 from pprint import pprint
 
 import torch
-import wandb
 import yaml
 from addict import Dict
 from torch import nn, optim
 from torch.utils.data import DataLoader
 
+import wandb
 from dataset.kinetics import Kinetics700, collate_fn, get_transforms
-from model.criterion import DPCLoss, BERTCPCLoss
-from model.model import DPC, BERTCPC
+from model.criterion import BERTCPCLoss, DPCLoss
+from model.model import BERTCPC, DPC
 from util import spatial_transforms, temporal_transforms
 from util.utils import AverageMeter, ModelSaver, Timer
 
@@ -19,68 +19,68 @@ from util.utils import AverageMeter, ModelSaver, Timer
 def train_epoch(loader, model, optimizer, criterion, device, CONFIG, epoch):
     train_timer = Timer()
     model.train()
-    train_loss = AverageMeter("train XEloss")
-    train_acc = AverageMeter("train Accuracy")
+    metrics = [AverageMeter("XELoss"), AverageMeter("MSELoss"), AverageMeter("Accuracy (%)")]
     for it, data in enumerate(loader):
         clip = data["clip"].to(device)
 
         optimizer.zero_grad()
         output = model(clip)
-        loss, losses = criterion(*output)
+        loss, lossdict = criterion(*output)
 
-        train_loss.update(losses["XELoss"])
-        train_acc.update(losses["Accuracy (%)"])
+        for metric in metrics:
+            metric.update(lossdict[metric.name])
         loss.backward()
         if CONFIG.grad_clip > 0:
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=CONFIG.grad_clip)
         optimizer.step()
         if it % 10 == 9:
-            if CONFIG.use_wandb:
-                wandb.log({train_loss.name: train_loss.avg, train_acc.name: train_acc.avg})
+            metricstr = " | ".join([f"train {metric}" for metric in metrics])
             print(
                 f"epoch {epoch:03d}/{CONFIG.max_epoch:03d} | train | "
                 f"{train_timer} | iter {it+1:06d}/{len(loader):06d} | "
-                f"{train_loss} | {train_acc}",
+                f"{metricstr}",
                 flush=True,
             )
-            train_loss.reset()
-            train_acc.reset()
+            if CONFIG.use_wandb:
+                for metric in metrics:
+                    wandb.log({f"train {metric.name}": metric.avg})
+            for metric in metrics:
+                metric.reset()
 
 
 def validate(loader, model, criterion, device, CONFIG, epoch):
     val_timer = Timer()
-    val_loss = AverageMeter("validation loss")
-    val_acc = AverageMeter("validation accuracy")
-    gl_val_loss = AverageMeter("epoch val XELoss")
-    gl_val_acc = AverageMeter("epoch val Accuracy")
+    metrics = [AverageMeter("XELoss"), AverageMeter("MSELoss"), AverageMeter("Accuracy (%)")]
+    global_metrics = [AverageMeter("XELoss"), AverageMeter("MSELoss"), AverageMeter("Accuracy (%)")]
     model.eval()
     for it, data in enumerate(loader):
         clip = data["clip"].to(device)
 
         with torch.no_grad():
             output = model(clip)
-            loss, losses = criterion(*output)
+            loss, lossdict = criterion(*output)
 
-        val_loss.update(losses["XELoss"])
-        val_acc.update(losses["Accuracy (%)"])
-
-        gl_val_loss.update(losses["XELoss"])
-        gl_val_acc.update(losses["Accuracy (%)"])
+        for metric in metrics:
+            metric.update(lossdict[metric.name])
+        for metric in global_metrics:
+            metric.update(lossdict[metric.name])
         if it % 10 == 9:
+            metricstr = " | ".join([f"validation {metric}" for metric in metrics])
             print(
                 f"epoch {epoch:03d}/{CONFIG.max_epoch:03d} | valid | "
                 f"{val_timer} | iter {it+1:06d}/{len(loader):06d} | "
-                f"{val_loss} | {val_acc}",
+                f"{metricstr}",
                 flush=True,
             )
-            val_loss.reset()
-            val_acc.reset()
+            for metric in metrics:
+                metric.reset()
         # validating for 100 steps is enough
         if it == 100:
             break
     if CONFIG.use_wandb:
-        wandb.log({gl_val_loss.name: gl_val_loss.avg, gl_val_acc.name: gl_val_acc.avg})
-    return gl_val_acc.avg
+        for metric in global_metrics:
+            wandb.log({f"epoch {metric.name}": metric.avg})
+    return global_metrics[2].avg
 
 
 if __name__ == "__main__":
@@ -144,7 +144,7 @@ if __name__ == "__main__":
         print("using CPU")
     model = model.to(device)
     # for sending pretrained weights to GPU for optimizer
-    #for state in optimizer.state.values():
+    # for state in optimizer.state.values():
     #    for k, v in state.items():
     #        if isinstance(v, torch.Tensor):
     #            state[k] = v.to(device)
