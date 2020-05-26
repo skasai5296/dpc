@@ -1,6 +1,7 @@
 import argparse
 import os
 import random
+import subprocess
 from pprint import pprint
 
 import numpy as np
@@ -25,6 +26,8 @@ def train_epoch(loader, model, optimizer, criterion, device, CONFIG, epoch):
     for it, data in enumerate(loader):
         clip = data["clip"].to(device)
         label = data["label"].to(device)
+        if it == 1:
+            subprocess.run(["nvidia-smi"])
 
         optimizer.zero_grad()
         out = model(clip)
@@ -61,6 +64,8 @@ def validate(loader, model, criterion, device, CONFIG, epoch):
         # batch size 1
         clip = data["clip"].to(device)
         label = data["label"].to(device)
+        if it == 1:
+            subprocess.run(["nvidia-smi"])
 
         with torch.no_grad():
             # batch size 1
@@ -186,6 +191,7 @@ if __name__ == "__main__":
                 state[k] = v.to(device)
     if torch.cuda.device_count() > 1:
         model = nn.DataParallel(model)
+    subprocess.run(["nvidia-smi"])
 
     """  Dataset  """
     sp_t, tp_t = get_transforms("train", CONFIG)
