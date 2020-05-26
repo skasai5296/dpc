@@ -204,7 +204,7 @@ if __name__ == "__main__":
     )
     val_dl = DataLoader(
         val_ds,
-        batch_size=CONFIG.batch_size * 2,
+        batch_size=CONFIG.batch_size,
         shuffle=True,
         num_workers=CONFIG.num_workers,
         collate_fn=collate_fn,
