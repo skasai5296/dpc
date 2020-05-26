@@ -195,17 +195,20 @@ class DPCClassification(nn.Module):
 
 class PositionalEncoding(nn.Module):
     def __init__(self, d_model, dropout=0.1, max_len=5000):
-        super(PositionalEncoding, self).__init__()
+        super().__init__()
         self.dropout = nn.Dropout(p=dropout)
 
         pe = torch.zeros(max_len, d_model)
         position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
         div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-np.log(10000.0) / d_model))
+        # pe: (max_len, d_model)
         pe[:, 0::2] = torch.sin(position * div_term)
         pe[:, 1::2] = torch.cos(position * div_term)
+        # pe: (max_len, 1, d_model)
         pe = pe.unsqueeze(0).transpose(0, 1)
         self.register_buffer("pe", pe)
 
+    # x: (max_len, B, d_model)
     def forward(self, x):
         x = x + self.pe[: x.size(0), :]
         return self.dropout(x)
@@ -250,18 +253,18 @@ class BERTCPC(nn.Module):
         # masked_out : (B, self.dropnum)
         drop_indices = torch.empty(B, self.dropnum, dtype=torch.long, device=out.device)
         keep_indices = torch.empty(B, N - self.dropnum, dtype=torch.long, device=out.device)
-        for i, seq in enumerate(masked_out):
+        for i in range(B):
             indices = torch.randperm(N, device=out.device)
             drop = indices[: self.dropnum]
             drop_indices[i] = drop
             keep = indices[self.dropnum :]
             keep_indices[i] = keep
             # seq: (N, hidden_size)
-            seq.index_fill_(0, drop, 0)
+            masked_out[i].index_fill_(0, drop, 0)
 
         # trans_out : (B, N, hidden_size)
         trans_out = self.transformer_encoder(self.pe(masked_out.permute(1, 0, 2))).permute(1, 0, 2)
-        pred = self.predictor(self.pe(trans_out.permute(1, 0, 2))).permute(1, 0, 2)
+        pred = self.predictor(trans_out.permute(1, 0, 2)).permute(1, 0, 2)
         return out, pred, drop_indices, keep_indices
 
     # x: (B, num_clips, C, clip_len, H, W)
@@ -276,8 +279,8 @@ class BERTCPC(nn.Module):
         # out : (B, N, hidden_size)
         out = self.fc(out).view(B, N, self.hidden_size)
 
-        # trans_out : (B, N, hidden_size)
-        trans_out = self.transformer_encoder(self.pe(out.permute(1, 0, 2))).permute(1, 0, 2)
+        # out : (B, N, hidden_size)
+        out = self.transformer_encoder(self.pe(out.permute(1, 0, 2))).permute(1, 0, 2)
         return trans_out
 
 
@@ -298,14 +301,140 @@ class BERTCPCClassification(nn.Module):
         return out
 
 
-class SpatialPositionalEncoding(nn.Module):
+class SpatiotemporalPositionalEncoding(nn.Module):
+    def __init__(self, d_model, spatial_size, max_len):
+        self.pe = PositionalEncoding(d_model, max_len=max_len)
+        self.emb_x = nn.Embedding(spatial_size, d_model)
+        self.emb_y = nn.Embedding(spatial_size, d_model)
+
+    # x : (B, N, S, S, D)
+    def forward(self, x):
+        B, N, S, S, D = x.size()
+        # val : (S)
+        val = torch.arange(S, device=x.device)
+        # val_x : (B, N, S, 1)
+        val_x = val.repeat(B, N, S).unsqueeze(-1).unsqueeze(-1)
+        # x_enc : (B, N, S, 1, D)
+        x_enc = self.emb_x(val_x)
+        # val_y : (B, N, 1, S)
+        val_y = val.repeat(B, N, S).unsqueeze(2).unsqueeze(-1)
+        # y_enc : (B, N, 1, S, D)
+        y_enc = self.emb_y(val_y)
+        # x : (B, N, S, S, D)
+        x += x_enc
+        x += y_enc
+
+        # temporal : (N, B, D)
+        temporal = torch.zeros(N, B, D, device=x.device())
+        # temporal : (B, N, 1, 1, D)
+        temporal = self.pe(temporal).permute(1, 0, 2).unsqueeze(2).unsqueeze(2)
+        x += temporal
+        return x
+
+
+class FineGrainedCPC(nn.Module):
     def __init__(
-        self, d_model,
+        self, input_size, hidden_size, spatial_size, num_layers, num_heads, n_clip, mask_p=0.3
     ):
-        pass
+        super().__init__()
+        self.mask_p = mask_p
+        self.hidden_size = hidden_size
+        self.cnn = ClipEncoder()
+        self.fc = nn.Linear(512, hidden_size)
+        self.spatiotemporal_pe = SpatiotemporalPositionalEncoding(
+            hidden_size, spatial_size, max_len=n_clip
+        )
+        encoder_layer = nn.TransformerEncoderLayer(d_model=hidden_size, nhead=num_heads)
+        self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
+        self.predictor = nn.TransformerEncoder(encoder_layer, num_layers=1)
+        # number of tokens to mask
+        self.dropnum = int(n_clip * spatial_size * spatial_size * mask_p)
+
+    def forward(self, x, flag="full"):
+        if flag == "full":
+            return self._full_pass(x)
+        elif flag == "extract":
+            return self._extract_feature(x)
+
+    # x: (B, num_clips, C, clip_len, H, W)
+    # pred, out : (B, N, S, S, hidden_size)
+    # drop_indices, keep_indices : (B, self.dropnum)
+    def _full_pass(self, x):
+        B, N, *sizes = x.size()
+        x = x.view(B * N, *sizes)
+        # out : (B * N, 512, S, S)
+        out = self.cnn(x)
+        BxN, D, S, S = out.size()
+        print(out.size())
+        # out : (B * N, S, S, hidden_size)
+        out = self.fc(out.permute(0, 2, 3, 1))
+        # out : (B, N * S * S, hidden_size)
+        out = out.view(B, N * S * S, self.hidden_size)
+        # masked_out : (B, N * S * S, hidden_size)
+        masked_out = out.clone()
+
+        # masked_out : (B, self.dropnum)
+        drop_indices = torch.empty(B, self.dropnum, dtype=torch.long, device=out.device)
+        keep_indices = torch.empty(B, N - self.dropnum, dtype=torch.long, device=out.device)
+        for i in range(B):
+            indices = torch.randperm(N * S * S, device=out.device)
+            drop = indices[: self.dropnum]
+            drop_indices[i] = drop
+            keep = indices[self.dropnum :]
+            keep_indices[i] = keep
+            # seq: (N * S * S, hidden_size)
+            masked_out[i].index_fill_(0, drop, 0)
+
+        # masked_out : (B, N, S, S, hidden_size)
+        masked_out = masked_out.view(B, N, S, S, self.hidden_size)
+        # masked_out : (B, N * S * S, hidden_size)
+        masked_out = self.spatiotemporal_pe(masked_out).view(B, N * S * S, self.hidden_size)
+
+        # trans_out : (B, N * S * S, hidden_size)
+        trans_out = self.transformer_encoder(masked_out.permute(1, 0, 2)).permute(1, 0, 2)
+        pred = self.predictor(trans_out.permute(1, 0, 2)).permute(1, 0, 2)
+        return out, pred, drop_indices, keep_indices
+
+    def _extract_feature(self, x):
+        B, N, *sizes = x.size()
+        x = x.view(B * N, *sizes)
+        # out : (B * N, 512, S, S)
+        out = self.cnn(x)
+        BxN, D, S, S = out.size()
+        # out : (B * N, S, S, hidden_size)
+        out = self.fc(out.permute(0, 2, 3, 1))
+        # out : (B, N, S, S, hidden_size)
+        out = out.view(B, N, S, S, self.hidden_size)
+        # out : (B, N * S * S, hidden_size)
+        out = self.spatiotemporal_pe(out).view(B, N * S * S, self.hidden_size)
+        # out : (B, N * S * S, hidden_size)
+        out = self.transformer_encoder(out.permute(1, 0, 2)).permute(1, 0, 2)
+        return out
+
+
+class FineGrainedCPCClassification(nn.Module):
+    def __init__(
+        self,
+        input_size,
+        hidden_size,
+        spatial_size,
+        num_layers,
+        num_heads,
+        n_clip,
+        num_classes,
+        mask_p=0.3,
+    ):
+        super().__init__()
+        self.dpc = FineGrainedCPC(
+            input_size, hidden_size, spatial_size, num_layers, num_heads, n_clip, mask_p
+        )
+        self.classification = nn.Linear(hidden_size, num_classes)
 
     def forward(self, x):
-        pass
+        out = self.dpc(x, "extract")
+        # (B, N*S*S, hidden_size)
+        out = self.classification(out.mean(1))
+        return out
 
 
 if __name__ == "__main__":
