@@ -311,7 +311,6 @@ class SpatiotemporalPositionalEncoding(nn.Module):
     # x : (B, N, S, S, D)
     def forward(self, x):
         B, N, S, S, D = x.size()
-        print(x.size())
         # val : (B, N, S)
         val = torch.arange(S, device=x.device)
         # val_x : (1, 1, S, 1)
