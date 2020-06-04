@@ -22,7 +22,7 @@ from util.utils import AverageMeter, ModelSaver, Timer
 def train_epoch(loader, model, optimizer, criterion, device, CONFIG, epoch):
     train_timer = Timer()
     metrics = [AverageMeter("XELoss"), AverageMeter("MSELoss"), AverageMeter("Accuracy (%)")]
-    if not CONFIG.bert:
+    if CONFIG.model in ("cpc", "fgcpc"):
         metrics.pop(1)
     model.train()
     for it, data in enumerate(loader):
@@ -59,7 +59,7 @@ def validate(loader, model, criterion, device, CONFIG, epoch):
     val_timer = Timer()
     metrics = [AverageMeter("XELoss"), AverageMeter("MSELoss"), AverageMeter("Accuracy (%)")]
     global_metrics = [AverageMeter("XELoss"), AverageMeter("MSELoss"), AverageMeter("Accuracy (%)")]
-    if not CONFIG.bert:
+    if CONFIG.model in ("cpc", "fgcpc"):
         metrics.pop(1)
         global_metrics.pop(1)
     model.eval()
@@ -127,16 +127,7 @@ if __name__ == "__main__":
         wandb.init(name=CONFIG.config_name, config=CONFIG, project=CONFIG.project_name)
 
     """  Model Components  """
-    if CONFIG.model == "CPC":
-        model = BERTCPC(
-            CONFIG.input_size,
-            CONFIG.hidden_size,
-            CONFIG.num_layers,
-            CONFIG.num_heads,
-            CONFIG.n_clip,
-        )
-        criterion = BERTCPCLoss()
-    elif CONFIG.model == "DPC":
+    if CONFIG.model == "DPC":
         model = DPC(
             CONFIG.input_size,
             CONFIG.hidden_size,
@@ -147,6 +138,16 @@ if __name__ == "__main__":
             CONFIG.dropout,
         )
         criterion = DPCLoss()
+    elif CONFIG.model == "CPC":
+        model = BERTCPC(
+            CONFIG.input_size,
+            CONFIG.hidden_size,
+            CONFIG.num_layers,
+            CONFIG.num_heads,
+            CONFIG.n_clip,
+            CONFIG.dropout,
+        )
+        criterion = BERTCPCLoss()
     elif CONFIG.model == "FGCPC":
         model = FineGrainedCPC(
             CONFIG.input_size,

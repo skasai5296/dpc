@@ -128,16 +128,7 @@ if __name__ == "__main__":
         )
 
     """  Model Components  """
-    if CONFIG.model == "CPC":
-        model = BERTCPCClassification(
-            CONFIG.input_size,
-            CONFIG.hidden_size,
-            CONFIG.num_layers,
-            CONFIG.num_heads,
-            CONFIG.n_clip,
-            700,
-        )
-    elif CONFIG.model == "DPC":
+    if CONFIG.model == "DPC":
         model = DPCClassification(
             CONFIG.input_size,
             CONFIG.hidden_size,
@@ -145,6 +136,16 @@ if __name__ == "__main__":
             CONFIG.num_layers,
             CONFIG.n_clip,
             CONFIG.pred_step,
+            CONFIG.finetune_dropout,
+            700,
+        )
+    elif CONFIG.model == "CPC":
+        model = BERTCPCClassification(
+            CONFIG.input_size,
+            CONFIG.hidden_size,
+            CONFIG.num_layers,
+            CONFIG.num_heads,
+            CONFIG.n_clip,
             CONFIG.finetune_dropout,
             700,
         )
@@ -156,8 +157,8 @@ if __name__ == "__main__":
             CONFIG.num_layers,
             CONFIG.num_heads,
             CONFIG.n_clip,
-            700,
             CONFIG.finetune_dropout,
+            700,
         )
 
     """  Load Pretrained Weights  """

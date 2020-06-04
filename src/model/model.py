@@ -126,7 +126,7 @@ class DPC(nn.Module):
         if flag == "full":
             return self._full_pass(x)
         elif flag == "extract":
-            return self._extract_features(x)
+            return self._extract_feature(x)
 
     # x: (B, num_clips, C, clip_len, H, W)
     # pred, out : (B, N, hidden_size, H, W)
@@ -281,7 +281,7 @@ class BERTCPC(nn.Module):
 
         # out : (B, N, hidden_size)
         out = self.transformer_encoder(self.pe(out.permute(1, 0, 2))).permute(1, 0, 2)
-        return trans_out
+        return out
 
 
 class BERTCPCClassification(nn.Module):
@@ -421,8 +421,8 @@ class FineGrainedCPCClassification(nn.Module):
         num_layers,
         num_heads,
         n_clip,
+        mask_p,
         num_classes,
-        mask_p=0.3,
     ):
         super().__init__()
         self.dpc = FineGrainedCPC(
