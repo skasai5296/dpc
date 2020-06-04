@@ -159,6 +159,8 @@ if __name__ == "__main__":
             CONFIG.dropout,
         )
         criterion = BERTCPCLoss()
+    if CONFIG.use_wandb:
+        wandb.watch(model)
     optimizer = optim.Adam(model.parameters(), lr=CONFIG.lr, weight_decay=CONFIG.weight_decay)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(
         optimizer, mode="max", factor=CONFIG.dampening_rate, patience=CONFIG.patience, verbose=True,

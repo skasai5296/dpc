@@ -160,6 +160,8 @@ if __name__ == "__main__":
             CONFIG.finetune_dropout,
             700,
         )
+    if CONFIG.use_wandb:
+        wandb.watch(model)
 
     """  Load Pretrained Weights  """
     saver = ModelSaver(os.path.join(CONFIG.outpath, CONFIG.config_name))
