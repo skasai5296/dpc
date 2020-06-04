@@ -303,6 +303,7 @@ class BERTCPCClassification(nn.Module):
 
 class SpatiotemporalPositionalEncoding(nn.Module):
     def __init__(self, d_model, spatial_size, max_len):
+        super().__init__()
         self.pe = PositionalEncoding(d_model, max_len=max_len)
         self.emb_x = nn.Embedding(spatial_size, d_model)
         self.emb_y = nn.Embedding(spatial_size, d_model)
@@ -310,22 +311,23 @@ class SpatiotemporalPositionalEncoding(nn.Module):
     # x : (B, N, S, S, D)
     def forward(self, x):
         B, N, S, S, D = x.size()
-        # val : (S)
+        print(x.size())
+        # val : (B, N, S)
         val = torch.arange(S, device=x.device)
-        # val_x : (B, N, S, 1)
-        val_x = val.repeat(B, N, S).unsqueeze(-1).unsqueeze(-1)
-        # x_enc : (B, N, S, 1, D)
+        # val_x : (1, 1, S, 1)
+        val_x = val.unsqueeze(0).unsqueeze(0).unsqueeze(-1)
+        # x_enc : (1, 1, S, 1, D)
         x_enc = self.emb_x(val_x)
-        # val_y : (B, N, 1, S)
-        val_y = val.repeat(B, N, S).unsqueeze(2).unsqueeze(-1)
-        # y_enc : (B, N, 1, S, D)
+        # val_y : (1, 1, 1, S)
+        val_y = val.unsqueeze(0).unsqueeze(0).unsqueeze(0)
+        # y_enc : (1, 1, 1, S, D)
         y_enc = self.emb_y(val_y)
         # x : (B, N, S, S, D)
         x += x_enc
         x += y_enc
 
         # temporal : (N, B, D)
-        temporal = torch.zeros(N, B, D, device=x.device())
+        temporal = torch.zeros(N, B, D, device=x.device)
         # temporal : (B, N, 1, 1, D)
         temporal = self.pe(temporal).permute(1, 0, 2).unsqueeze(2).unsqueeze(2)
         x += temporal
@@ -365,7 +367,6 @@ class FineGrainedCPC(nn.Module):
         # out : (B * N, 512, S, S)
         out = self.cnn(x)
         BxN, D, S, S = out.size()
-        print(out.size())
         # out : (B * N, S, S, hidden_size)
         out = self.fc(out.permute(0, 2, 3, 1))
         # out : (B, N * S * S, hidden_size)
@@ -375,7 +376,7 @@ class FineGrainedCPC(nn.Module):
 
         # masked_out : (B, self.dropnum)
         drop_indices = torch.empty(B, self.dropnum, dtype=torch.long, device=out.device)
-        keep_indices = torch.empty(B, N - self.dropnum, dtype=torch.long, device=out.device)
+        keep_indices = torch.empty(B, N * S * S - self.dropnum, dtype=torch.long, device=out.device)
         for i in range(B):
             indices = torch.randperm(N * S * S, device=out.device)
             drop = indices[: self.dropnum]
