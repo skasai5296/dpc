@@ -247,7 +247,7 @@ if __name__ == "__main__":
     )
 
     """  Training Loop  """
-    for ep in range(saver.epoch, CONFIG.max_epoch + 1):
+    for ep in range(saver.epoch, CONFIG.finetune_max_epoch + 1):
         print(f"global time {global_timer} | start training epoch {ep}")
         train_epoch(train_dl, model, optimizer, criterion, device, CONFIG, ep)
         print(f"global time {global_timer} | start validation epoch {ep}")

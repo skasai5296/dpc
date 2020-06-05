@@ -33,9 +33,10 @@ patience: 5
 seed: -1
 
 # from which epoch to start finetuning, set to None for newest
-finetune_gpu_ids: [0, 1]
+finetune_gpu_ids: [0]
 finetune_from:
 finetune_batch_size: 32
+finetune_max_epoch: 100
 finetune_lr: 0.001
 finetune_weight_decay: 0.00001
 finetune_dropout: 0.1
