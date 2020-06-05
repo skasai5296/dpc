@@ -243,13 +243,13 @@ class BERTCPC(nn.Module):
         # out : (B * N, 512, H', W')
         out = self.cnn(x)
         BxN, D, *_ = out.size()
-        # out : (BxN, 512)
-        out = F.adaptive_avg_pool2d(out, 1).view(BxN, D)
+        # out : (BxN, hidden_size)
+        out = self.fc(F.adaptive_avg_pool2d(out, 1).view(BxN, D))
         # out : (B, N, hidden_size)
-        out = self.fc(out).view(B, N, self.hidden_size)
-
+        out = out.view(B, N, self.hidden_size)
         # masked_out : (B, N, hidden_size)
         masked_out = out.clone()
+
         # masked_out : (B, self.dropnum)
         drop_indices = torch.empty(B, self.dropnum, dtype=torch.long, device=out.device)
         keep_indices = torch.empty(B, N - self.dropnum, dtype=torch.long, device=out.device)
