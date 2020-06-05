@@ -14,7 +14,7 @@ from torch.utils.data import DataLoader
 import wandb
 from dataset.kinetics import Kinetics700, collate_fn, get_transforms
 from model.criterion import BERTCPCLoss, DPCLoss
-from model.model import BERTCPC, DPC, FineGrainedCPC
+from model.model import BERTCPC, DPC, FineGrainedCPC, FineGrainedCPC_FullMask
 from util import spatial_transforms, temporal_transforms
 from util.utils import AverageMeter, ModelSaver, Timer
 
@@ -150,6 +150,17 @@ if __name__ == "__main__":
         criterion = BERTCPCLoss()
     elif CONFIG.model == "FGCPC":
         model = FineGrainedCPC(
+            CONFIG.input_size,
+            CONFIG.hidden_size,
+            7,
+            CONFIG.num_layers,
+            CONFIG.num_heads,
+            CONFIG.n_clip,
+            CONFIG.dropout,
+        )
+        criterion = BERTCPCLoss()
+    elif CONFIG.model == "FGCPC_FM":
+        model = FineGrainedCPC_FullMask(
             CONFIG.input_size,
             CONFIG.hidden_size,
             7,

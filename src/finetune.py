@@ -15,7 +15,8 @@ import wandb
 from dataset.kinetics import Kinetics700, collate_fn, get_transforms
 from model.criterion import ClassificationLoss
 from model.model import (BERTCPCClassification, DPCClassification,
-                         FineGrainedCPCClassification)
+                         FineGrainedCPCClassification,
+                         FineGrainedCPCFMClassification)
 from util import spatial_transforms, temporal_transforms
 from util.utils import AverageMeter, ModelSaver, Timer
 
@@ -151,6 +152,17 @@ if __name__ == "__main__":
         )
     elif CONFIG.model == "FGCPC":
         model = FineGrainedCPCClassification(
+            CONFIG.input_size,
+            CONFIG.hidden_size,
+            7,
+            CONFIG.num_layers,
+            CONFIG.num_heads,
+            CONFIG.n_clip,
+            CONFIG.finetune_dropout,
+            700,
+        )
+    elif CONFIG.model == "FGCPC_FM":
+        model = FineGrainedCPCFMClassification(
             CONFIG.input_size,
             CONFIG.hidden_size,
             7,
