@@ -45,7 +45,7 @@ def train_epoch(loader, model, optimizer, criterion, device, CONFIG, epoch):
         if it % 100 == 99:
             metricstr = " | ".join([f"train {metric}" for metric in metrics])
             print(
-                f"epoch {epoch:03d}/{CONFIG.max_epoch:03d} | train | "
+                f"epoch {epoch:03d}/{CONFIG.finetune_max_epoch:03d} | train | "
                 f"{train_timer} | iter {it+1:06d}/{len(loader):06d} | "
                 f"{metricstr}",
                 flush=True,
@@ -79,7 +79,7 @@ def validate(loader, model, criterion, device, CONFIG, epoch):
         if it % 100 == 99:
             metricstr = " | ".join([f"validation {metric}" for metric in metrics])
             print(
-                f"epoch {epoch:03d}/{CONFIG.max_epoch:03d} | valid | "
+                f"epoch {epoch:03d}/{CONFIG.finetune_max_epoch:03d} | valid | "
                 f"{val_timer} | iter {it+1:06d}/{len(loader):06d} | "
                 f"{metricstr}",
                 flush=True,
