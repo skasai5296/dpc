@@ -462,14 +462,12 @@ class FineGrainedCPC_FullMask(nn.Module):
         for i in range(B):
             indices = torch.randperm(N, device=out.device)
             drop = indices[: self.dropnum] * S * S
-            offset = torch.arange(S * S).repeat(self.dropnum)
+            offset = torch.arange(S * S, device=out.device).repeat(self.dropnum)
             drop = drop.repeat_interleave(S * S) + offset
-            print(drop.size())
             drop_indices[i] = drop
             keep = indices[self.dropnum :] * S * S
-            offset = torch.arange(S * S).repeat(N - self.dropnum)
+            offset = torch.arange(S * S, device=out.device).repeat(N - self.dropnum)
             keep = keep.repeat_interleave(S * S) + offset
-            print(keep.size())
             keep_indices[i] = keep
             # seq: (N, S * S, hidden_size)
             masked_out[i].index_fill_(0, drop, 0)
