@@ -112,4 +112,7 @@ class BERTCPCLoss(nn.Module):
         xe = self.xeloss(lossmat, target)
         mse = self.mseloss(inputs, reconstructions)
 
-        return xe + mse, {"XELoss": xe.item(), "MSELoss": mse.item(), "Accuracy (%)": acc}
+        return (
+            xe + mse * self.mse_weight,
+            {"XELoss": xe.item(), "MSELoss": mse.item(), "Accuracy (%)": acc},
+        )
