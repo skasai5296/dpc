@@ -65,9 +65,10 @@ class ClassificationLoss(nn.Module):
 
 
 class BERTCPCLoss(nn.Module):
-    def __init__(self):
+    def __init__(self, mse_weight):
         super().__init__()
         self.xeloss = nn.CrossEntropyLoss()
+        self.mse_weight = mse_weight
         self.mseloss = nn.MSELoss()
 
     def forward(self, in_seq, out_seq, drop_idx, keep_idx):

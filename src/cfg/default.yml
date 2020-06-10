@@ -29,6 +29,7 @@ weight_decay: 0.00001
 grad_clip: 0.
 dampening_rate: 0.1
 patience: 5
+mse_weight: 0.0
 
 seed: -1
 

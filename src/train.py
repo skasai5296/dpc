@@ -22,7 +22,7 @@ from util.utils import AverageMeter, ModelSaver, Timer
 def train_epoch(loader, model, optimizer, criterion, device, CONFIG, epoch):
     train_timer = Timer()
     metrics = [AverageMeter("XELoss"), AverageMeter("MSELoss"), AverageMeter("Accuracy (%)")]
-    if CONFIG.model in ("cpc", "fgcpc"):
+    if CONFIG.model in ("DPC"):
         metrics.pop(1)
     model.train()
     for it, data in enumerate(loader):
@@ -59,7 +59,7 @@ def validate(loader, model, criterion, device, CONFIG, epoch):
     val_timer = Timer()
     metrics = [AverageMeter("XELoss"), AverageMeter("MSELoss"), AverageMeter("Accuracy (%)")]
     global_metrics = [AverageMeter("XELoss"), AverageMeter("MSELoss"), AverageMeter("Accuracy (%)")]
-    if CONFIG.model in ("cpc", "fgcpc"):
+    if CONFIG.model in ("DPC"):
         metrics.pop(1)
         global_metrics.pop(1)
     model.eval()
@@ -147,7 +147,7 @@ if __name__ == "__main__":
             CONFIG.n_clip,
             CONFIG.dropout,
         )
-        criterion = BERTCPCLoss()
+        criterion = BERTCPCLoss(mse_weight=CONFIG.mse_weight)
     elif CONFIG.model == "FGCPC":
         model = FineGrainedCPC(
             CONFIG.input_size,
@@ -158,7 +158,7 @@ if __name__ == "__main__":
             CONFIG.n_clip,
             CONFIG.dropout,
         )
-        criterion = BERTCPCLoss()
+        criterion = BERTCPCLoss(mse_weight=CONFIG.mse_weight)
     elif CONFIG.model == "FGCPC_FM":
         model = FineGrainedCPC_FullMask(
             CONFIG.input_size,
@@ -169,7 +169,7 @@ if __name__ == "__main__":
             CONFIG.n_clip,
             CONFIG.dropout,
         )
-        criterion = BERTCPCLoss()
+        criterion = BERTCPCLoss(mse_weight=CONFIG.mse_weight)
     if CONFIG.use_wandb:
         wandb.watch(model)
     optimizer = optim.Adam(model.parameters(), lr=CONFIG.lr, weight_decay=CONFIG.weight_decay)
