@@ -125,7 +125,11 @@ if __name__ == "__main__":
 
     if CONFIG.use_wandb:
         wandb.init(
-            name=f"{CONFIG.config_name}_finetune", config=CONFIG, project=CONFIG.project_name,
+            name=f"{CONFIG.config_name}_finetune",
+            id=f"{CONFIG.config_name}_finetune",
+            resume=f"{CONFIG.config_name}_finetune",
+            config=CONFIG,
+            project=CONFIG.project_name,
         )
 
     """  Model Components  """

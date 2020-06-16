@@ -124,7 +124,13 @@ if __name__ == "__main__":
         torch.backends.cudnn.benchmark = True
 
     if CONFIG.use_wandb:
-        wandb.init(name=CONFIG.config_name, config=CONFIG, project=CONFIG.project_name)
+        wandb.init(
+            name=CONFIG.config_name,
+            id=CONFIG.config_name,
+            resume=CONFIG.config_name,
+            config=CONFIG,
+            project=CONFIG.project_name,
+        )
 
     """  Model Components  """
     if CONFIG.model == "DPC":

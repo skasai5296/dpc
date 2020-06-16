@@ -11,7 +11,7 @@ from utils import (VideoLoaderHDF5, clipify, collate_fn, get_stats,
                    get_transforms)
 
 
-class Kinetics700(Dataset):
+class UCF101(Dataset):
     def __init__(
         self,
         root_path,
@@ -102,10 +102,10 @@ class Kinetics700(Dataset):
 
 if __name__ == "__main__":
     sp_t, tp_t = get_transforms("train", resize=112, clip_len=5, n_clip=8, downsample=2)
-    ds = Kinetics700(
-        "/groups1/gaa50131/datasets/kinetics",
-        "videos_700_hdf5",
-        "kinetics-700-hdf5.json",
+    ds = UCF101(
+        "/groups1/gaa50131/datasets/ucf101",
+        "hdf5",
+        "anno/ucf101_01.json",
         spatial_transform=sp_t,
         temporal_transform=tp_t,
         clip_len=5,
