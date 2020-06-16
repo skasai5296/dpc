@@ -1,4 +1,5 @@
 import argparse
+import hashlib
 import os
 import random
 import subprocess
@@ -121,10 +122,11 @@ if __name__ == "__main__":
         torch.backends.cudnn.benchmark = True
 
     if CONFIG.use_wandb:
+        idhash = hashlib.sha256(CONFIG.new_config_name.encode()).hexdigest()
         wandb.init(
             name=CONFIG.new_config_name,
-            id=CONFIG.new_config_name,
-            resume=CONFIG.new_config_name,
+            id=idhash,
+            resume=idhash,
             config=CONFIG,
             project=CONFIG.project_name,
         )
