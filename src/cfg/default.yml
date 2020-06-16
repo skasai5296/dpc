@@ -2,7 +2,10 @@ use_wandb: false
 project_name: DPC
 config_name: default
 
+# kinetics, ucf, hmdb
+dataset: kinetics
 data_path: /home/seito/ssd2/kinetics/
+#data_path: /groups1/gaa50131/datasets/kinetics
 video_path: videos_700_hdf5
 ann_path: kinetics-700-hdf5.json
 only_best_checkpoint: false
@@ -29,18 +32,7 @@ weight_decay: 0.00001
 grad_clip: 0.
 dampening_rate: 0.1
 patience: 5
-mse_weight: 0.0
 
 seed: -1
 
-# from which epoch to start finetuning, set to None for newest
-finetune_gpu_ids: [0]
-finetune_from:
-finetune_batch_size: 32
-finetune_max_epoch: 100
-finetune_lr: 0.001
-finetune_weight_decay: 0.00001
-finetune_dropout: 0.1
-finetune_grad_clip: 0.
-finetune_dampening_rate: 0.1
-finetune_patience: 5
+mse_weight: 0.0

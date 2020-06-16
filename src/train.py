@@ -12,10 +12,8 @@ from torch import nn, optim
 from torch.utils.data import DataLoader
 
 import wandb
-from dataset.kinetics import Kinetics700
-from dataset.utils import collate_fn, get_transforms
+from dataset.helper import get_dataloader
 from model.helper import get_model_and_loss
-from util import spatial_transforms, temporal_transforms
 from util.utils import AverageMeter, ModelSaver, Timer
 
 
@@ -26,8 +24,9 @@ def train_epoch(loader, model, optimizer, criterion, device, CONFIG, epoch):
         metrics.pop(1)
     model.train()
     for it, data in enumerate(loader):
+
         clip = data["clip"].to(device)
-        if it == 1:
+        if it == 1 and torch.cuda.is_available():
             subprocess.run(["nvidia-smi"])
 
         optimizer.zero_grad()
@@ -50,7 +49,8 @@ def train_epoch(loader, model, optimizer, criterion, device, CONFIG, epoch):
             )
             if CONFIG.use_wandb:
                 for metric in metrics:
-                    wandb.log({f"train {metric.name}": metric.avg})
+                    wandb.log({f"train {metric.name}": metric.avg}, commit=False)
+                wandb.log({"iteration": it + epoch * len(loader)})
             for metric in metrics:
                 metric.reset()
 
@@ -64,8 +64,9 @@ def validate(loader, model, criterion, device, CONFIG, epoch):
         global_metrics.pop(1)
     model.eval()
     for it, data in enumerate(loader):
+
         clip = data["clip"].to(device)
-        if it == 1:
+        if it == 1 and torch.cuda.is_available():
             subprocess.run(["nvidia-smi"])
 
         with torch.no_grad():
@@ -91,7 +92,7 @@ def validate(loader, model, criterion, device, CONFIG, epoch):
             break
     if CONFIG.use_wandb:
         for metric in global_metrics:
-            wandb.log({f"epoch {metric.name}": metric.avg})
+            wandb.log({f"epoch {metric.name}": metric.avg}, commit=False)
     return global_metrics[-1].avg
 
 
@@ -116,7 +117,6 @@ if __name__ == "__main__":
         random.seed(CONFIG.seed)
         np.random.seed(CONFIG.seed)
         torch.manual_seed(CONFIG.seed)
-        # torch.manual_seed_all(CONFIG.seed)
         torch.backends.cudnn.deterministic = True
         torch.backends.cudnn.benchmark = False
     else:
@@ -163,59 +163,10 @@ if __name__ == "__main__":
                 state[k] = v.to(device)
     if torch.cuda.device_count() > 1:
         model = nn.DataParallel(model)
-    subprocess.run(["nvidia-smi"])
+        subprocess.run(["nvidia-smi"])
 
     """  Dataset  """
-    sp_t, tp_t = get_transforms(
-        "train",
-        resize=CONFIG.resize,
-        clip_len=CONFIG.clip_len,
-        n_clip=CONFIG.n_clip,
-        downsample=CONFIG.downsample,
-    )
-    train_ds = Kinetics700(
-        CONFIG.data_path,
-        CONFIG.video_path,
-        CONFIG.ann_path,
-        clip_len=CONFIG.clip_len,
-        n_clip=CONFIG.n_clip,
-        downsample=CONFIG.downsample,
-        spatial_transform=sp_t,
-        temporal_transform=tp_t,
-        mode="train",
-    )
-    sp_t, tp_t = get_transforms(
-        "val",
-        resize=CONFIG.resize,
-        clip_len=CONFIG.clip_len,
-        n_clip=CONFIG.n_clip,
-        downsample=CONFIG.downsample,
-    )
-    val_ds = Kinetics700(
-        CONFIG.data_path,
-        CONFIG.video_path,
-        CONFIG.ann_path,
-        clip_len=CONFIG.clip_len,
-        n_clip=CONFIG.n_clip,
-        downsample=CONFIG.downsample,
-        spatial_transform=sp_t,
-        temporal_transform=tp_t,
-        mode="val",
-    )
-    train_dl = DataLoader(
-        train_ds,
-        batch_size=CONFIG.batch_size,
-        shuffle=True,
-        num_workers=CONFIG.num_workers,
-        collate_fn=collate_fn,
-    )
-    val_dl = DataLoader(
-        val_ds,
-        batch_size=CONFIG.batch_size,
-        shuffle=True,
-        num_workers=CONFIG.num_workers,
-        collate_fn=collate_fn,
-    )
+    train_dl, val_dl = get_dataloader(CONFIG)
 
     """  Training Loop  """
     for ep in range(saver.epoch, CONFIG.max_epoch + 1):

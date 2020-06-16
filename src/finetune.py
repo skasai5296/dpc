@@ -12,13 +12,8 @@ from torch import nn, optim
 from torch.utils.data import DataLoader
 
 import wandb
-from dataset.kinetics import Kinetics700
-from dataset.utils import collate_fn, get_transforms
-from model.criterion import ClassificationLoss
-from model.model import (BERTCPCClassification, DPCClassification,
-                         FineGrainedCPCClassification,
-                         FineGrainedCPCFMClassification)
-from util import spatial_transforms, temporal_transforms
+from dataset.helper import get_dataloader
+from model.helper import get_model_and_loss
 from util.utils import AverageMeter, ModelSaver, Timer
 
 
@@ -29,7 +24,7 @@ def train_epoch(loader, model, optimizer, criterion, device, CONFIG, epoch):
     for it, data in enumerate(loader):
         clip = data["clip"].to(device)
         label = data["label"].to(device)
-        if it == 1:
+        if it == 1 and torch.cuda.is_available():
             subprocess.run(["nvidia-smi"])
 
         optimizer.zero_grad()
@@ -39,21 +34,22 @@ def train_epoch(loader, model, optimizer, criterion, device, CONFIG, epoch):
         for metric in metrics:
             metric.update(lossdict[metric.name])
         loss.backward()
-        if CONFIG.finetune_grad_clip > 0:
-            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=CONFIG.finetune_grad_clip)
+        if CONFIG.grad_clip > 0:
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=CONFIG.grad_clip)
         optimizer.step()
 
-        if it % 100 == 99:
+        if it % 10 == 9:
             metricstr = " | ".join([f"train {metric}" for metric in metrics])
             print(
-                f"epoch {epoch:03d}/{CONFIG.finetune_max_epoch:03d} | train | "
+                f"epoch {epoch:03d}/{CONFIG.max_epoch:03d} | train | "
                 f"{train_timer} | iter {it+1:06d}/{len(loader):06d} | "
                 f"{metricstr}",
                 flush=True,
             )
             if CONFIG.use_wandb:
                 for metric in metrics:
-                    wandb.log({f"finetune train {metric.name}": metric.avg})
+                    wandb.log({f"finetune train {metric.name}": metric.avg}, commit=False)
+                wandb.log({"iteration": it + epoch * len(loader)})
             for metric in metrics:
                 metric.reset()
 
@@ -66,7 +62,7 @@ def validate(loader, model, criterion, device, CONFIG, epoch):
     for it, data in enumerate(loader):
         clip = data["clip"].to(device)
         label = data["label"].to(device)
-        if it == 1:
+        if it == 1 and torch.cuda.is_available():
             subprocess.run(["nvidia-smi"])
 
         with torch.no_grad():
@@ -77,10 +73,10 @@ def validate(loader, model, criterion, device, CONFIG, epoch):
             metric.update(lossdict[metric.name])
         for metric in global_metrics:
             metric.update(lossdict[metric.name])
-        if it % 100 == 99:
+        if it % 10 == 9:
             metricstr = " | ".join([f"validation {metric}" for metric in metrics])
             print(
-                f"epoch {epoch:03d}/{CONFIG.finetune_max_epoch:03d} | valid | "
+                f"epoch {epoch:03d}/{CONFIG.max_epoch:03d} | valid | "
                 f"{val_timer} | iter {it+1:06d}/{len(loader):06d} | "
                 f"{metricstr}",
                 flush=True,
@@ -92,7 +88,7 @@ def validate(loader, model, criterion, device, CONFIG, epoch):
             break
     if CONFIG.use_wandb:
         for metric in global_metrics:
-            wandb.log({f"finetune epoch {metric.name}": metric.avg})
+            wandb.log({f"finetune epoch {metric.name}": metric.avg}, commit=False)
     return global_metrics[-1].avg
 
 
@@ -112,12 +108,12 @@ if __name__ == "__main__":
     print("CONFIGURATIONS:")
     pprint(CONFIG)
 
+    CONFIG.new_config_name = f"ft_{CONFIG.dataset}_{CONFIG.config_name}"
     """  Set Random Seeds  """
     if CONFIG.seed >= 0:
         random.seed(CONFIG.seed)
         np.random.seed(CONFIG.seed)
         torch.manual_seed(CONFIG.seed)
-        # torch.manual_seed_all(CONFIG.seed)
         torch.backends.cudnn.deterministic = True
         torch.backends.cudnn.benchmark = False
     else:
@@ -126,57 +122,15 @@ if __name__ == "__main__":
 
     if CONFIG.use_wandb:
         wandb.init(
-            name=f"{CONFIG.config_name}_finetune",
-            id=f"{CONFIG.config_name}_finetune",
-            resume=f"{CONFIG.config_name}_finetune",
+            name=CONFIG.new_config_name,
+            id=CONFIG.new_config_name,
+            resume=CONFIG.new_config_name,
             config=CONFIG,
             project=CONFIG.project_name,
         )
 
     """  Model Components  """
-    if CONFIG.model == "DPC":
-        model = DPCClassification(
-            CONFIG.input_size,
-            CONFIG.hidden_size,
-            CONFIG.kernel_size,
-            CONFIG.num_layers,
-            CONFIG.n_clip,
-            CONFIG.pred_step,
-            CONFIG.finetune_dropout,
-            700,
-        )
-    elif CONFIG.model == "CPC":
-        model = BERTCPCClassification(
-            CONFIG.input_size,
-            CONFIG.hidden_size,
-            CONFIG.num_layers,
-            CONFIG.num_heads,
-            CONFIG.n_clip,
-            CONFIG.finetune_dropout,
-            700,
-        )
-    elif CONFIG.model == "FGCPC":
-        model = FineGrainedCPCClassification(
-            CONFIG.input_size,
-            CONFIG.hidden_size,
-            7,
-            CONFIG.num_layers,
-            CONFIG.num_heads,
-            CONFIG.n_clip,
-            CONFIG.finetune_dropout,
-            700,
-        )
-    elif CONFIG.model == "FGCPC_FM":
-        model = FineGrainedCPCFMClassification(
-            CONFIG.input_size,
-            CONFIG.hidden_size,
-            7,
-            CONFIG.num_layers,
-            CONFIG.num_heads,
-            CONFIG.n_clip,
-            CONFIG.finetune_dropout,
-            700,
-        )
+    model, criterion = get_model_and_loss(CONFIG, finetune=True)
     if CONFIG.use_wandb:
         wandb.watch(model)
 
@@ -185,31 +139,24 @@ if __name__ == "__main__":
     saver.load_ckpt(model.dpc, optimizer=None, scheduler=None, start_epoch=CONFIG.finetune_from)
 
     """  Model Components  """
-    criterion = ClassificationLoss()
-    optimizer = optim.Adam(
-        model.parameters(), lr=CONFIG.finetune_lr, weight_decay=CONFIG.finetune_weight_decay,
-    )
+    optimizer = optim.Adam(model.parameters(), lr=CONFIG.lr, weight_decay=CONFIG.weight_decay,)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer,
-        mode="max",
-        factor=CONFIG.finetune_dampening_rate,
-        patience=CONFIG.finetune_patience,
-        verbose=True,
+        optimizer, mode="max", factor=CONFIG.dampening_rate, patience=CONFIG.patience, verbose=True,
     )
 
     """  Load from Checkpoint  """
-    saver = ModelSaver(os.path.join(CONFIG.outpath, f"{CONFIG.config_name}_finetune"))
+    saver = ModelSaver(os.path.join(CONFIG.outpath, CONFIG.new_config_name))
     if opt.resume:
         saver.load_ckpt(model, optimizer, scheduler)
     else:
         saver.epoch = 1
 
     """  Devices  """
-    gpu_ids = list(map(str, CONFIG.finetune_gpu_ids))
+    gpu_ids = list(map(str, CONFIG.gpu_ids))
     os.environ["CUDA_VISIBLE_DEVICES"] = ",".join(gpu_ids)
     if torch.cuda.is_available():
         device = torch.device("cuda")
-        print("using GPU numbers {}".format(CONFIG.finetune_gpu_ids))
+        print("using GPU numbers {}".format(CONFIG.gpu_ids))
     else:
         device = torch.device("cpu")
         print("using CPU")
@@ -221,62 +168,13 @@ if __name__ == "__main__":
                 state[k] = v.to(device)
     if torch.cuda.device_count() > 1:
         model = nn.DataParallel(model)
-    subprocess.run(["nvidia-smi"])
+        subprocess.run(["nvidia-smi"])
 
     """  Dataset  """
-    sp_t, tp_t = get_transforms(
-        "train",
-        resize=CONFIG.resize,
-        clip_len=CONFIG.clip_len,
-        n_clip=CONFIG.n_clip,
-        downsample=CONFIG.downsample,
-    )
-    train_ds = Kinetics700(
-        CONFIG.data_path,
-        CONFIG.video_path,
-        CONFIG.ann_path,
-        clip_len=CONFIG.clip_len,
-        n_clip=CONFIG.n_clip,
-        downsample=CONFIG.downsample,
-        spatial_transform=sp_t,
-        temporal_transform=tp_t,
-        mode="train",
-    )
-    sp_t, tp_t = get_transforms(
-        "val",
-        resize=CONFIG.resize,
-        clip_len=CONFIG.clip_len,
-        n_clip=CONFIG.n_clip,
-        downsample=CONFIG.downsample,
-    )
-    val_ds = Kinetics700(
-        CONFIG.data_path,
-        CONFIG.video_path,
-        CONFIG.ann_path,
-        clip_len=CONFIG.clip_len,
-        n_clip=CONFIG.n_clip,
-        downsample=CONFIG.downsample,
-        spatial_transform=sp_t,
-        temporal_transform=tp_t,
-        mode="val",
-    )
-    train_dl = DataLoader(
-        train_ds,
-        batch_size=CONFIG.finetune_batch_size,
-        shuffle=True,
-        num_workers=CONFIG.num_workers,
-        collate_fn=collate_fn,
-    )
-    val_dl = DataLoader(
-        val_ds,
-        batch_size=CONFIG.finetune_batch_size,
-        shuffle=True,
-        num_workers=CONFIG.num_workers,
-        collate_fn=collate_fn,
-    )
+    train_dl, val_dl = get_dataloader(CONFIG)
 
     """  Training Loop  """
-    for ep in range(saver.epoch, CONFIG.finetune_max_epoch + 1):
+    for ep in range(saver.epoch, CONFIG.max_epoch + 1):
         print(f"global time {global_timer} | start training epoch {ep}")
         train_epoch(train_dl, model, optimizer, criterion, device, CONFIG, ep)
         print(f"global time {global_timer} | start validation epoch {ep}")

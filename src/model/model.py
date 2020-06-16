@@ -343,85 +343,6 @@ class FineGrainedCPC(nn.Module):
         self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
         self.predictor = nn.TransformerEncoder(encoder_layer, num_layers=1)
         # number of tokens to mask
-        self.dropnum = int(n_clip * spatial_size * spatial_size * mask_p)
-
-    def forward(self, x, flag="full"):
-        if flag == "full":
-            return self._full_pass(x)
-        elif flag == "extract":
-            return self._extract_feature(x)
-
-    # x: (B, num_clips, C, clip_len, H, W)
-    # pred, out : (B, N * S * S, hidden_size)
-    # drop_indices, keep_indices : (B, self.dropnum)
-    def _full_pass(self, x):
-        B, N, *sizes = x.size()
-        x = x.view(B * N, *sizes)
-        # out : (B * N, 512, S, S)
-        out = self.cnn(x)
-        BxN, D, S, S = out.size()
-        # out : (B * N, S, S, hidden_size)
-        out = self.fc(out.permute(0, 2, 3, 1))
-        # out : (B, N * S * S, hidden_size)
-        out = out.view(B, N * S * S, self.hidden_size)
-        # masked_out : (B, N * S * S, hidden_size)
-        masked_out = out.clone()
-
-        # masked_out : (B, self.dropnum)
-        drop_indices = torch.empty(B, self.dropnum, dtype=torch.long, device=out.device)
-        keep_indices = torch.empty(B, N * S * S - self.dropnum, dtype=torch.long, device=out.device)
-        for i in range(B):
-            indices = torch.randperm(N * S * S, device=out.device)
-            drop = indices[: self.dropnum]
-            drop_indices[i] = drop
-            keep = indices[self.dropnum :]
-            keep_indices[i] = keep
-            # seq: (N * S * S, hidden_size)
-            masked_out[i].index_fill_(0, drop, 0)
-
-        # masked_out : (B, N, S, S, hidden_size)
-        masked_out = masked_out.view(B, N, S, S, self.hidden_size)
-        # masked_out : (B, N * S * S, hidden_size)
-        masked_out = self.spatiotemporal_pe(masked_out).view(B, N * S * S, self.hidden_size)
-
-        # trans_out : (B, N * S * S, hidden_size)
-        trans_out = self.transformer_encoder(masked_out.permute(1, 0, 2)).permute(1, 0, 2)
-        pred = self.predictor(trans_out.permute(1, 0, 2)).permute(1, 0, 2)
-        return out, pred, drop_indices, keep_indices
-
-    def _extract_feature(self, x):
-        B, N, *sizes = x.size()
-        x = x.view(B * N, *sizes)
-        # out : (B * N, 512, S, S)
-        out = self.cnn(x)
-        BxN, D, S, S = out.size()
-        # out : (B * N, S, S, hidden_size)
-        out = self.fc(out.permute(0, 2, 3, 1))
-        # out : (B, N, S, S, hidden_size)
-        out = out.view(B, N, S, S, self.hidden_size)
-        # out : (B, N * S * S, hidden_size)
-        out = self.spatiotemporal_pe(out).view(B, N * S * S, self.hidden_size)
-        # out : (B, N * S * S, hidden_size)
-        out = self.transformer_encoder(out.permute(1, 0, 2)).permute(1, 0, 2)
-        return out
-
-
-class FineGrainedCPC_FullMask(nn.Module):
-    def __init__(
-        self, input_size, hidden_size, spatial_size, num_layers, num_heads, n_clip, mask_p=0.3
-    ):
-        super().__init__()
-        self.mask_p = mask_p
-        self.hidden_size = hidden_size
-        self.cnn = ClipEncoder()
-        self.fc = nn.Linear(512, hidden_size)
-        self.spatiotemporal_pe = SpatiotemporalPositionalEncoding(
-            hidden_size, spatial_size, max_len=n_clip
-        )
-        encoder_layer = nn.TransformerEncoderLayer(d_model=hidden_size, nhead=num_heads)
-        self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
-        self.predictor = nn.TransformerEncoder(encoder_layer, num_layers=1)
-        # number of tokens to mask
         self.dropnum = int(n_clip * mask_p)
 
     def forward(self, x, flag="full"):
@@ -507,31 +428,6 @@ class FineGrainedCPCClassification(nn.Module):
     ):
         super().__init__()
         self.dpc = FineGrainedCPC(
-            input_size, hidden_size, spatial_size, num_layers, num_heads, n_clip, mask_p
-        )
-        self.classification = nn.Linear(hidden_size, num_classes)
-
-    def forward(self, x):
-        out = self.dpc(x, "extract")
-        # (B, N*S*S, hidden_size)
-        out = self.classification(out.mean(1))
-        return out
-
-
-class FineGrainedCPCFMClassification(nn.Module):
-    def __init__(
-        self,
-        input_size,
-        hidden_size,
-        spatial_size,
-        num_layers,
-        num_heads,
-        n_clip,
-        mask_p,
-        num_classes,
-    ):
-        super().__init__()
-        self.dpc = FineGrainedCPC_FullMask(
             input_size, hidden_size, spatial_size, num_layers, num_heads, n_clip, mask_p
         )
         self.classification = nn.Linear(hidden_size, num_classes)

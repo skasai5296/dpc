@@ -5,8 +5,8 @@ import os
 import torch
 from torch.utils.data import Dataset
 
-from utils import (VideoLoaderHDF5, clipify, collate_fn, get_stats,
-                   get_transforms)
+from dataset.utils import (VideoLoaderHDF5, clipify, collate_fn, get_stats,
+                           get_transforms)
 
 
 class Kinetics700(Dataset):

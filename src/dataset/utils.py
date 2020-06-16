@@ -4,8 +4,7 @@ import h5py
 import torch
 from PIL import Image
 
-import spatial_transforms
-import temporal_transforms
+from dataset import spatial_transforms, temporal_transforms
 
 
 class VideoLoaderHDF5(object):
@@ -39,7 +38,7 @@ def clipify(tensor, clip_len):
 
 
 def get_stats():
-    """get mean and std of Kinetics"""
+    """get mean and std for Kinetics"""
     maximum = 255.0
     mean = [110.63666788 / maximum, 103.16065604 / maximum, 96.29023126 / maximum]
     std = [38.7568578 / maximum, 37.88248729 / maximum, 40.02898126 / maximum]
