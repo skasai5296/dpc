@@ -46,8 +46,8 @@ def get_stats():
     return mean, std
 
 
-def get_transforms(mode, resize, clip_len, n_clip, downsample, finetune=False):
-    assert mode in ("train", "val", "finetune")
+def get_transforms(mode, resize, clip_len, n_clip, downsample):
+    assert mode in ("train", "val")
     mean, std = get_stats()
     if mode == "train":
         sp_t = spatial_transforms.Compose(
@@ -72,21 +72,13 @@ def get_transforms(mode, resize, clip_len, n_clip, downsample, finetune=False):
                 spatial_transforms.Normalize(mean=mean, std=std),
             ]
         )
-    if finetune:
-        tp_t = temporal_transforms.Compose(
-            [
-                temporal_transforms.TemporalSubsampling(downsample),
-                # temporal_transforms.SlidingWindow(size=clip_len * n_clip, stride=6),
-                temporal_transforms.TemporalRandomCrop(size=clip_len * n_clip),
-            ]
-        )
-    else:
-        tp_t = temporal_transforms.Compose(
-            [
-                temporal_transforms.TemporalSubsampling(downsample),
-                temporal_transforms.TemporalRandomCrop(size=clip_len * n_clip),
-            ]
-        )
+    tp_t = temporal_transforms.Compose(
+        [
+            temporal_transforms.TemporalSubsampling(downsample),
+            # temporal_transforms.SlidingWindow(size=clip_len * n_clip, stride=6),
+            temporal_transforms.TemporalRandomCrop(size=clip_len * n_clip),
+        ]
+    )
     return sp_t, tp_t
 
 

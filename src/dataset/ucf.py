@@ -3,8 +3,6 @@ import json
 import os
 
 import torch
-import yaml
-from addict import Dict
 from torch.utils.data import Dataset
 
 from utils import (VideoLoaderHDF5, clipify, collate_fn, get_stats,

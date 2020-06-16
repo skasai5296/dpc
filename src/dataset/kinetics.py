@@ -3,8 +3,6 @@ import json
 import os
 
 import torch
-import yaml
-from addict import Dict
 from torch.utils.data import Dataset
 
 from utils import (VideoLoaderHDF5, clipify, collate_fn, get_stats,
@@ -101,7 +99,7 @@ class Kinetics700(Dataset):
 
 
 if __name__ == "__main__":
-    sp_t, tp_t = get_transforms("train", resize=112, clip_len=5, n_clip=8, downsample=2)
+    sp_t, tp_t = get_transforms("train", resize=112, clip_len=5, n_clip=8, downsample=3)
     ds = Kinetics700(
         "/groups1/gaa50131/datasets/kinetics",
         "videos_700_hdf5",
@@ -110,7 +108,7 @@ if __name__ == "__main__":
         temporal_transform=tp_t,
         clip_len=5,
         n_clip=8,
-        downsample=2,
+        downsample=3,
         mode="train",
     )
     for i in range(20):

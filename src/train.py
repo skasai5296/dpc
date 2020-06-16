@@ -12,9 +12,9 @@ from torch import nn, optim
 from torch.utils.data import DataLoader
 
 import wandb
-from dataset.kinetics import Kinetics700, collate_fn, get_transforms
-from model.criterion import BERTCPCLoss, DPCLoss
-from model.model import BERTCPC, DPC, FineGrainedCPC, FineGrainedCPC_FullMask
+from dataset.kinetics import Kinetics700
+from dataset.utils import collate_fn, get_transforms
+from model.helper import get_model_and_loss
 from util import spatial_transforms, temporal_transforms
 from util.utils import AverageMeter, ModelSaver, Timer
 
@@ -133,49 +133,7 @@ if __name__ == "__main__":
         )
 
     """  Model Components  """
-    if CONFIG.model == "DPC":
-        model = DPC(
-            CONFIG.input_size,
-            CONFIG.hidden_size,
-            CONFIG.kernel_size,
-            CONFIG.num_layers,
-            CONFIG.n_clip,
-            CONFIG.pred_step,
-            CONFIG.dropout,
-        )
-        criterion = DPCLoss()
-    elif CONFIG.model == "CPC":
-        model = BERTCPC(
-            CONFIG.input_size,
-            CONFIG.hidden_size,
-            CONFIG.num_layers,
-            CONFIG.num_heads,
-            CONFIG.n_clip,
-            CONFIG.dropout,
-        )
-        criterion = BERTCPCLoss(mse_weight=CONFIG.mse_weight)
-    elif CONFIG.model == "FGCPC":
-        model = FineGrainedCPC(
-            CONFIG.input_size,
-            CONFIG.hidden_size,
-            7,
-            CONFIG.num_layers,
-            CONFIG.num_heads,
-            CONFIG.n_clip,
-            CONFIG.dropout,
-        )
-        criterion = BERTCPCLoss(mse_weight=CONFIG.mse_weight)
-    elif CONFIG.model == "FGCPC_FM":
-        model = FineGrainedCPC_FullMask(
-            CONFIG.input_size,
-            CONFIG.hidden_size,
-            7,
-            CONFIG.num_layers,
-            CONFIG.num_heads,
-            CONFIG.n_clip,
-            CONFIG.dropout,
-        )
-        criterion = BERTCPCLoss(mse_weight=CONFIG.mse_weight)
+    model, criterion = get_model_and_loss(CONFIG, finetune=False)
     if CONFIG.use_wandb:
         wandb.watch(model)
     optimizer = optim.Adam(model.parameters(), lr=CONFIG.lr, weight_decay=CONFIG.weight_decay)
@@ -208,7 +166,13 @@ if __name__ == "__main__":
     subprocess.run(["nvidia-smi"])
 
     """  Dataset  """
-    sp_t, tp_t = get_transforms("train", CONFIG)
+    sp_t, tp_t = get_transforms(
+        "train",
+        resize=CONFIG.resize,
+        clip_len=CONFIG.clip_len,
+        n_clip=CONFIG.n_clip,
+        downsample=CONFIG.downsample,
+    )
     train_ds = Kinetics700(
         CONFIG.data_path,
         CONFIG.video_path,
@@ -220,7 +184,13 @@ if __name__ == "__main__":
         temporal_transform=tp_t,
         mode="train",
     )
-    sp_t, tp_t = get_transforms("val", CONFIG)
+    sp_t, tp_t = get_transforms(
+        "val",
+        resize=CONFIG.resize,
+        clip_len=CONFIG.clip_len,
+        n_clip=CONFIG.n_clip,
+        downsample=CONFIG.downsample,
+    )
     val_ds = Kinetics700(
         CONFIG.data_path,
         CONFIG.video_path,
