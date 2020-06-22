@@ -9,12 +9,11 @@ import numpy as np
 import torch
 import yaml
 from addict import Dict
-from torch import nn, optim
-from torch.utils.data import DataLoader
+from torch import nn
 
 import wandb
 from dataset.helper import get_dataloader
-from model.helper import get_model_and_loss
+from model.helper import get_model_and_loss, get_optimizer_and_scheduler
 from util.utils import AverageMeter, ModelSaver, Timer
 
 
@@ -141,10 +140,7 @@ if __name__ == "__main__":
     saver.load_ckpt(model.dpc, optimizer=None, scheduler=None, start_epoch=CONFIG.finetune_from)
 
     """  Model Components  """
-    optimizer = optim.Adam(model.parameters(), lr=CONFIG.lr, weight_decay=CONFIG.weight_decay,)
-    scheduler = optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer, mode="max", factor=CONFIG.dampening_rate, patience=CONFIG.patience, verbose=True,
-    )
+    optimizer, scheduler = get_optimizer_and_scheduler(CONFIG, model)
 
     """  Load from Checkpoint  """
     saver = ModelSaver(os.path.join(CONFIG.outpath, CONFIG.new_config_name))
@@ -182,7 +178,12 @@ if __name__ == "__main__":
         print(f"global time {global_timer} | start validation epoch {ep}")
         val_acc = validate(val_dl, model, criterion, device, CONFIG, ep)
         if CONFIG.use_wandb:
-            wandb.log({"learning_rate": optimizer.param_groups[0]["lr"]})
+            wandb.log(
+                {
+                    "learning_rate": optimizer.param_groups[0]["lr"],
+                    "iteration": len(train_dl) * (ep + 1),
+                }
+            )
         scheduler.step(val_acc)
         saver.save_ckpt_if_best(
             model, optimizer, scheduler, val_acc, delete_prev=CONFIG.only_best_checkpoint,

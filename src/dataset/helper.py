@@ -1,7 +1,7 @@
 from torch.utils.data import DataLoader
 
 from dataset.hmdb import HMDB51
-from dataset.kinetics import Kinetics700
+from dataset.kinetics import Kinetics
 from dataset.ucf import UCF101
 from dataset.utils import collate_fn, get_transforms
 
@@ -23,7 +23,7 @@ def get_dataloader(CONFIG):
     )
     assert CONFIG.dataset in ("kinetics", "ucf", "hmdb")
     if CONFIG.dataset == "kinetics":
-        train_ds = Kinetics700(
+        train_ds = Kinetics(
             CONFIG.data_path,
             CONFIG.video_path,
             CONFIG.ann_path,
@@ -34,7 +34,7 @@ def get_dataloader(CONFIG):
             temporal_transform=tr_tp_t,
             mode="train",
         )
-        val_ds = Kinetics700(
+        val_ds = Kinetics(
             CONFIG.data_path,
             CONFIG.video_path,
             CONFIG.ann_path,

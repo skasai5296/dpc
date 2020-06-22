@@ -9,7 +9,7 @@ from dataset.utils import (VideoLoaderHDF5, clipify, collate_fn, get_stats,
                            get_transforms)
 
 
-class Kinetics700(Dataset):
+class Kinetics(Dataset):
     def __init__(
         self,
         root_path,

@@ -1,3 +1,5 @@
+from torch import optim
+
 from model.criterion import BERTCPCLoss, ClassificationLoss, DPCLoss
 from model.model import (BERTCPC, DPC, BERTCPCClassification,
                          DPCClassification, FineGrainedCPC,
@@ -39,6 +41,8 @@ def get_model_and_loss(CONFIG, finetune=False):
                 CONFIG.dropout,
             )
             criterion = BERTCPCLoss(mse_weight=CONFIG.mse_weight)
+        else:
+            raise NotImplementedError()
     else:
         if CONFIG.model == "DPC":
             model = DPCClassification(
@@ -72,5 +76,38 @@ def get_model_and_loss(CONFIG, finetune=False):
                 CONFIG.dropout,
                 700,
             )
+        else:
+            raise NotImplementedError()
         criterion = ClassificationLoss()
     return model, criterion
+
+
+def get_optimizer_and_scheduler(CONFIG, model):
+    assert CONFIG.optimizer in ("adam", "sgd")
+    assert CONFIG.scheduler in ("none", "step", "plateau")
+    if CONFIG.optimizer == "adam":
+        optimizer = optim.Adam(model.parameters(), lr=CONFIG.lr, weight_decay=CONFIG.weight_decay)
+    elif CONFIG.optimizer == "sgd":
+        optimizer = optim.SGD(
+            model.parameters(),
+            lr=CONFIG.lr,
+            momentum=CONFIG.momentum,
+            weight_decay=CONFIG.weight_decay,
+        )
+    else:
+        raise NotImplementedError()
+    if CONFIG.scheduler == "step":
+        scheduler = optim.lr_scheduler.StepLR(
+            optimizer, step_size=CONFIG.patience, gamma=CONFIG.dampening_rate,
+        )
+    elif CONFIG.scheduler == "plateau":
+        scheduler = optim.lr_scheduler.ReduceLROnPlateau(
+            optimizer,
+            mode="max",
+            factor=CONFIG.dampening_rate,
+            patience=CONFIG.patience,
+            verbose=True,
+        )
+    else:
+        scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=CONFIG.patience, gamma=1.0,)
+    return optimizer, scheduler

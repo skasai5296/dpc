@@ -37,8 +37,10 @@ class ModelSaver:
             model.load_state_dict(ckpt["model"], strict=True)
             if optimizer is not None and "optimizer" in ckpt.items():
                 optimizer.load_state_dict(ckpt["optimizer"])
+                print("loaded optimizer from checkpoint")
             if scheduler is not None and "scheduler" in ckpt.items():
                 scheduler.load_state_dict(ckpt["scheduler"])
+                print("loaded scheduler from checkpoint")
             self.best = ckpt["bestscore"]
             self.epoch = ckpt["epoch"] + 1
             print(f"best score is set to {self.best}, restarting from epoch " + f"{self.epoch}")

@@ -27,9 +27,12 @@ num_workers: 2
 outpath: out
 gpu_ids: [0]
 dropout: 0.1
-lr: 0.001
+optimizer: adam
+lr: 0.003
+momentum: 0.9
 weight_decay: 0.00001
 grad_clip: 0.
+scheduler: step
 dampening_rate: 0.1
 patience: 5
 
