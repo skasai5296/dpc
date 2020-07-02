@@ -40,6 +40,7 @@ class ModelSaver:
                 print("loaded optimizer from checkpoint")
             if scheduler is not None and "scheduler" in ckpt.items():
                 scheduler.load_state_dict(ckpt["scheduler"])
+                scheduler.last_epoch = ckpt["epoch"] - 1
                 print("loaded scheduler from checkpoint")
             self.best = ckpt["bestscore"]
             self.epoch = ckpt["epoch"] + 1

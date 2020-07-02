@@ -125,13 +125,21 @@ if __name__ == "__main__":
 
     if CONFIG.use_wandb:
         idhash = hashlib.sha256(CONFIG.config_name.encode()).hexdigest()
-        wandb.init(
-            name=CONFIG.config_name,
-            id=idhash,
-            resume=idhash,
-            config=CONFIG,
-            project=CONFIG.project_name,
-        )
+        if opt.resume:
+            wandb.init(
+                name=CONFIG.config_name,
+                id=idhash,
+                resume=idhash,
+                config=CONFIG,
+                project=CONFIG.project_name,
+            )
+        else:
+            wandb.init(
+                name=CONFIG.config_name,
+                id=idhash,
+                config=CONFIG,
+                project=CONFIG.project_name,
+            )
 
     """  Model Components  """
     model, criterion = get_model_and_loss(CONFIG, finetune=False)

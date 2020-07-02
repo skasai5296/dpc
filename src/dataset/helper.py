@@ -3,24 +3,40 @@ from torch.utils.data import DataLoader
 from dataset.hmdb import HMDB51
 from dataset.kinetics import Kinetics
 from dataset.ucf import UCF101
-from dataset.utils import collate_fn, get_transforms
+from dataset.utils import collate_fn, get_transforms, get_transforms_finetune
 
 
-def get_dataloader(CONFIG):
-    tr_sp_t, tr_tp_t = get_transforms(
-        "train",
-        resize=CONFIG.resize,
-        clip_len=CONFIG.clip_len,
-        n_clip=CONFIG.n_clip,
-        downsample=CONFIG.downsample,
-    )
-    val_sp_t, val_tp_t = get_transforms(
-        "val",
-        resize=CONFIG.resize,
-        clip_len=CONFIG.clip_len,
-        n_clip=CONFIG.n_clip,
-        downsample=CONFIG.downsample,
-    )
+def get_dataloader(CONFIG, finetune=False):
+    if not finetune:
+        tr_sp_t, tr_tp_t = get_transforms(
+            "train",
+            resize=CONFIG.resize,
+            clip_len=CONFIG.clip_len,
+            n_clip=CONFIG.n_clip,
+            downsample=CONFIG.downsample,
+        )
+        val_sp_t, val_tp_t = get_transforms(
+            "val",
+            resize=CONFIG.resize,
+            clip_len=CONFIG.clip_len,
+            n_clip=CONFIG.n_clip,
+            downsample=CONFIG.downsample,
+        )
+    else:
+        tr_sp_t, tr_tp_t = get_transforms_finetune(
+            "train",
+            resize=CONFIG.resize,
+            clip_len=CONFIG.clip_len,
+            n_clip=CONFIG.n_clip,
+            downsample=CONFIG.downsample,
+        )
+        val_sp_t, val_tp_t = get_transforms_finetune(
+            "val",
+            resize=CONFIG.resize,
+            clip_len=CONFIG.clip_len,
+            n_clip=CONFIG.n_clip,
+            downsample=CONFIG.downsample,
+        )
     assert CONFIG.dataset in ("kinetics", "ucf", "hmdb")
     if CONFIG.dataset == "kinetics":
         train_ds = Kinetics(

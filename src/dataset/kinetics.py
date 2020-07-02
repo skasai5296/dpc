@@ -100,7 +100,7 @@ class Kinetics(Dataset):
 
 if __name__ == "__main__":
     sp_t, tp_t = get_transforms("train", resize=112, clip_len=5, n_clip=8, downsample=3)
-    ds = Kinetics700(
+    ds = Kinetics(
         "/groups1/gaa50131/datasets/kinetics",
         "videos_700_hdf5",
         "kinetics-700-hdf5.json",

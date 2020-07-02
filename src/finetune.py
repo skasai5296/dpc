@@ -169,7 +169,7 @@ if __name__ == "__main__":
         subprocess.run(["nvidia-smi"])
 
     """  Dataset  """
-    train_dl, val_dl = get_dataloader(CONFIG)
+    train_dl, val_dl = get_dataloader(CONFIG, finetune=True)
 
     """  Training Loop  """
     for ep in range(saver.epoch, CONFIG.max_epoch + 1):

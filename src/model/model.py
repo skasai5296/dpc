@@ -219,6 +219,7 @@ class BERTCPC(nn.Module):
         encoder_layer = nn.TransformerEncoderLayer(d_model=hidden_size, nhead=num_heads)
         self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
         self.predictor = nn.TransformerEncoder(encoder_layer, num_layers=1)
+        self.drop_emb = nn.Embedding(2, hidden_size)
         # number of tokens to mask
         self.dropnum = int(n_clip * mask_p)
 
@@ -244,18 +245,21 @@ class BERTCPC(nn.Module):
         # masked_out : (B, N, hidden_size)
         masked_out = out.clone()
 
-        # masked_out : (B, self.dropnum)
-        drop_indices = torch.empty(B, self.dropnum, dtype=torch.long, device=out.device)
-        keep_indices = torch.empty(B, N - self.dropnum, dtype=torch.long, device=out.device)
+        # drop_indices : (B, self.dropnum)
+        drop_indices = torch.zeros(B, self.dropnum, dtype=torch.long, device=out.device)
+        keep_indices = torch.zeros(B, N - self.dropnum, dtype=torch.long, device=out.device)
+        drop_mask = torch.zeros(B, N, dtype=torch.long, device=out.device)
         for i in range(B):
             indices = torch.randperm(N, device=out.device)
             drop = indices[: self.dropnum]
             drop_indices[i] = drop
+            drop_mask[i].index_fill_(0, drop, 1)
             keep = indices[self.dropnum :]
             keep_indices[i] = keep
-            # seq: (N, hidden_size)
+            # masked_out[i]: (N, hidden_size)
             masked_out[i].index_fill_(0, drop, 0)
 
+        masked_out += self.drop_emb(drop_mask)
         # trans_out : (B, N, hidden_size)
         trans_out = self.transformer_encoder(self.pe(masked_out.permute(1, 0, 2))).permute(1, 0, 2)
         pred = self.predictor(trans_out.permute(1, 0, 2)).permute(1, 0, 2)
@@ -272,6 +276,8 @@ class BERTCPC(nn.Module):
         out = F.adaptive_avg_pool2d(out, 1).view(BxN, D)
         # out : (B, N, hidden_size)
         out = self.fc(out).view(B, N, self.hidden_size)
+        drop_mask = torch.zeros(B, N, dtype=torch.long, device=out.device)
+        out += self.drop_emb(drop_mask)
 
         # out : (B, N, hidden_size)
         out = self.transformer_encoder(self.pe(out.permute(1, 0, 2))).permute(1, 0, 2)
@@ -342,6 +348,7 @@ class FineGrainedCPC(nn.Module):
         encoder_layer = nn.TransformerEncoderLayer(d_model=hidden_size, nhead=num_heads)
         self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
         self.predictor = nn.TransformerEncoder(encoder_layer, num_layers=1)
+        self.drop_emb = nn.Embedding(2, hidden_size)
         # number of tokens to mask
         self.dropnum = int(n_clip * mask_p)
 
@@ -368,18 +375,20 @@ class FineGrainedCPC(nn.Module):
         masked_out = out.clone()
 
         # masked_out : (B, self.dropnum)
-        drop_indices = torch.empty(
+        drop_indices = torch.zeros(
             B, int(self.dropnum * S * S), dtype=torch.long, device=out.device
         )
-        keep_indices = torch.empty(
+        keep_indices = torch.zeros(
             B, int((N - self.dropnum) * S * S), dtype=torch.long, device=out.device
         )
+        drop_mask = torch.zeros(B, N*S*S, dtype=torch.long, device=out.device)
         for i in range(B):
             indices = torch.randperm(N, device=out.device)
             drop = indices[: self.dropnum] * S * S
             offset = torch.arange(S * S, device=out.device).repeat(self.dropnum)
             drop = drop.repeat_interleave(S * S) + offset
             drop_indices[i] = drop
+            drop_mask[i].index_fill_(0, drop, 1)
             keep = indices[self.dropnum :] * S * S
             offset = torch.arange(S * S, device=out.device).repeat(N - self.dropnum)
             keep = keep.repeat_interleave(S * S) + offset
@@ -387,6 +396,7 @@ class FineGrainedCPC(nn.Module):
             # seq: (N, S * S, hidden_size)
             masked_out[i].index_fill_(0, drop, 0)
 
+        masked_out += self.drop_emb(drop_mask)
         # masked_out : (B, N, S, S, hidden_size)
         masked_out = masked_out.view(B, N, S, S, self.hidden_size)
         # masked_out : (B, N * S * S, hidden_size)
@@ -409,6 +419,9 @@ class FineGrainedCPC(nn.Module):
         out = out.view(B, N, S, S, self.hidden_size)
         # out : (B, N * S * S, hidden_size)
         out = self.spatiotemporal_pe(out).view(B, N * S * S, self.hidden_size)
+
+        drop_mask = torch.zeros(B, N, dtype=torch.long, device=out.device)
+        out += self.drop_emb(drop_mask)
         # out : (B, N * S * S, hidden_size)
         out = self.transformer_encoder(out.permute(1, 0, 2)).permute(1, 0, 2)
         return out

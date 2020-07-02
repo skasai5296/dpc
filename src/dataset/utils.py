@@ -56,7 +56,7 @@ def get_transforms(mode, resize, clip_len, n_clip, downsample):
                 spatial_transforms.RandomHorizontalFlip(),
                 spatial_transforms.RandomGrayscale(p=0.5),
                 spatial_transforms.ColorJitter(
-                    brightness=0.5, contrast=0.5, saturation=0.5, hue=0.25
+                    brightness=0.5, contrast=0.5, saturation=0.5, hue=0.25,
                 ),
                 spatial_transforms.ToTensor(),
                 spatial_transforms.Normalize(mean=mean, std=std),
@@ -80,6 +80,36 @@ def get_transforms(mode, resize, clip_len, n_clip, downsample):
     )
     return sp_t, tp_t
 
+def get_transforms_finetune(mode, resize, clip_len, n_clip, downsample):
+    assert mode in ("train", "val")
+    mean, std = get_stats()
+    if mode == "train":
+        sp_t = spatial_transforms.Compose(
+            [
+                spatial_transforms.Resize(int(resize * 8 / 7)),
+                spatial_transforms.RandomResizedCrop(size=(resize, resize), scale=(0.5, 1.0)),
+                spatial_transforms.RandomHorizontalFlip(),
+                spatial_transforms.ToTensor(),
+                spatial_transforms.Normalize(mean=mean, std=std),
+            ]
+        )
+    elif mode == "val":
+        sp_t = spatial_transforms.Compose(
+            [
+                spatial_transforms.Resize(resize),
+                spatial_transforms.CenterCrop(size=(resize, resize)),
+                spatial_transforms.ToTensor(),
+                spatial_transforms.Normalize(mean=mean, std=std),
+            ]
+        )
+    tp_t = temporal_transforms.Compose(
+        [
+            temporal_transforms.TemporalSubsampling(downsample),
+            # temporal_transforms.SlidingWindow(size=clip_len * n_clip, stride=6),
+            temporal_transforms.TemporalRandomCrop(size=clip_len * n_clip),
+        ]
+    )
+    return sp_t, tp_t
 
 def collate_fn(datalist):
     clips = []

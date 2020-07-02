@@ -84,11 +84,11 @@ class BERTCPCLoss(nn.Module):
         """
         B, S, D = in_seq.size()
         B, dropnum = drop_idx.size()
-        predictions = torch.empty(B, dropnum, D, device=in_seq.device)
-        inputs = torch.empty(B, S - dropnum, D, device=in_seq.device)
-        reconstructions = torch.empty(B, S - dropnum, D, device=in_seq.device)
+        predictions = torch.zeros(B, dropnum, D, device=in_seq.device)
+        inputs = torch.zeros(B, S - dropnum, D, device=in_seq.device)
+        reconstructions = torch.zeros(B, S - dropnum, D, device=in_seq.device)
         # target: (B, dropnum)
-        target = torch.empty(B, dropnum, dtype=torch.long, device=in_seq.device)
+        target = torch.zeros(B, dropnum, dtype=torch.long, device=in_seq.device)
         for i, (inp, out, drop, keep) in enumerate(zip(in_seq, out_seq, drop_idx, keep_idx)):
             # pred: (dropnum, D)
             pred = out.index_select(0, drop)
@@ -108,6 +108,7 @@ class BERTCPCLoss(nn.Module):
         with torch.no_grad():
             # top1: (B * dropnum)
             top1 = lossmat.argmax(1)
+            print(target, top1)
             acc = torch.eq(top1, target).sum().item() / top1.size(0) * 100
         xe = self.xeloss(lossmat, target)
         mse = self.mseloss(inputs, reconstructions)
