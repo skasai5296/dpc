@@ -108,7 +108,6 @@ class BERTCPCLoss(nn.Module):
         with torch.no_grad():
             # top1: (B * dropnum)
             top1 = lossmat.argmax(1)
-            print(target, top1)
             acc = torch.eq(top1, target).sum().item() / top1.size(0) * 100
         xe = self.xeloss(lossmat, target)
         mse = self.mseloss(inputs, reconstructions)

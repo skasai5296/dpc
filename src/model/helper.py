@@ -109,5 +109,5 @@ def get_optimizer_and_scheduler(CONFIG, model):
             verbose=True,
         )
     else:
-        scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=CONFIG.patience, gamma=1.0,)
+        scheduler = None
     return optimizer, scheduler

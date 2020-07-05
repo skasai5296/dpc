@@ -381,7 +381,7 @@ class FineGrainedCPC(nn.Module):
         keep_indices = torch.zeros(
             B, int((N - self.dropnum) * S * S), dtype=torch.long, device=out.device
         )
-        drop_mask = torch.zeros(B, N*S*S, dtype=torch.long, device=out.device)
+        drop_mask = torch.zeros(B, N * S * S, dtype=torch.long, device=out.device)
         for i in range(B):
             indices = torch.randperm(N, device=out.device)
             drop = indices[: self.dropnum] * S * S
@@ -420,7 +420,7 @@ class FineGrainedCPC(nn.Module):
         # out : (B, N * S * S, hidden_size)
         out = self.spatiotemporal_pe(out).view(B, N * S * S, self.hidden_size)
 
-        drop_mask = torch.zeros(B, N, dtype=torch.long, device=out.device)
+        drop_mask = torch.zeros(B, N * S * S, dtype=torch.long, device=out.device)
         out += self.drop_emb(drop_mask)
         # out : (B, N * S * S, hidden_size)
         out = self.transformer_encoder(out.permute(1, 0, 2)).permute(1, 0, 2)

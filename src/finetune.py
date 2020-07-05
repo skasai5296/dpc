@@ -184,7 +184,10 @@ if __name__ == "__main__":
                     "iteration": len(train_dl) * (ep + 1),
                 }
             )
-        scheduler.step(val_acc)
+        if CONFIG.optimizer == "plateau":
+            scheduler.step(metrics=val_acc)
+        elif scheduler is not None:
+            scheduler.step()
         saver.save_ckpt_if_best(
             model, optimizer, scheduler, val_acc, delete_prev=CONFIG.only_best_checkpoint,
         )
