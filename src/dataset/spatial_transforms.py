@@ -16,6 +16,9 @@ class ToTensor(transforms.ToTensor):
     def randomize_parameters(self):
         pass
 
+class ToPILImage(transforms.ToPILImage):
+    def randomize_parameters(self):
+        pass
 
 class Normalize(transforms.Normalize):
     def randomize_parameters(self):

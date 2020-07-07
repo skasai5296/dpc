@@ -14,6 +14,7 @@ def get_dataloader(CONFIG, finetune=False):
             clip_len=CONFIG.clip_len,
             n_clip=CONFIG.n_clip,
             downsample=CONFIG.downsample,
+            consistent=CONFIG.model == "DPC",
         )
         val_sp_t, val_tp_t = get_transforms(
             "val",
