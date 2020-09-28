@@ -50,7 +50,7 @@ def train_epoch(loader, model, optimizer, criterion, device, CONFIG, epoch):
             if CONFIG.use_wandb:
                 for metric in metrics:
                     wandb.log({f"train {metric.name}": metric.avg}, commit=False)
-                wandb.log({"iteration": it + epoch * len(loader)})
+                wandb.log({"iteration": it + (epoch - 1) * len(loader)})
             for metric in metrics:
                 metric.reset()
 
@@ -135,10 +135,7 @@ if __name__ == "__main__":
             )
         else:
             wandb.init(
-                name=CONFIG.config_name,
-                id=idhash,
-                config=CONFIG,
-                project=CONFIG.project_name,
+                name=CONFIG.config_name, id=idhash, config=CONFIG, project=CONFIG.project_name,
             )
 
     """  Model Components  """
@@ -184,7 +181,7 @@ if __name__ == "__main__":
             wandb.log(
                 {
                     "learning_rate": optimizer.param_groups[0]["lr"],
-                    "iteration": len(train_dl) * (ep + 1),
+                    "iteration": len(train_dl) * ep,
                 }
             )
         if CONFIG.optimizer == "plateau":

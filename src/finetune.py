@@ -49,7 +49,7 @@ def train_epoch(loader, model, optimizer, criterion, device, CONFIG, epoch):
             if CONFIG.use_wandb:
                 for metric in metrics:
                     wandb.log({f"finetune train {metric.name}": metric.avg}, commit=False)
-                wandb.log({"iteration": it + epoch * len(loader)})
+                wandb.log({"iteration": it + (epoch - 1) * len(loader)})
             for metric in metrics:
                 metric.reset()
 
@@ -179,10 +179,7 @@ if __name__ == "__main__":
         val_acc = validate(val_dl, model, criterion, device, CONFIG, ep)
         if CONFIG.use_wandb:
             wandb.log(
-                {
-                    "learning_rate": optimizer.param_groups[0]["lr"],
-                    "iteration": len(train_dl) * (ep + 1),
-                }
+                {"learning_rate": optimizer.param_groups[0]["lr"], "iteration": len(train_dl) * ep}
             )
         if CONFIG.optimizer == "plateau":
             scheduler.step(metrics=val_acc)
